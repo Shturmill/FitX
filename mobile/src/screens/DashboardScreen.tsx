@@ -21,6 +21,7 @@ import {
 } from "../components/ui";
 import { colors, gradients } from "../theme/colors";
 import { useFoodContext } from "../contexts/FoodContext";
+import { useAuth } from "../contexts/AuthContext";
 import { TabParamList } from "../navigation/RootNavigator";
 
 interface Message {
@@ -32,7 +33,8 @@ type DashboardNavigationProp = BottomTabNavigationProp<TabParamList, "Home">;
 
 export function DashboardScreen() {
   const navigation = useNavigation<DashboardNavigationProp>();
-  const { getTotalCalories } = useFoodContext();
+  const { getTotalCalories, calorieGoal } = useFoodContext();
+  const { userSettings } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -44,7 +46,6 @@ export function DashboardScreen() {
 
   // Get calorie data from context
   const totalCalories = getTotalCalories();
-  const calorieGoal = 2400;
   const remaining = calorieGoal - totalCalories;
   const percentage = Math.round((totalCalories / calorieGoal) * 100);
 
@@ -86,10 +87,24 @@ export function DashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeText}>Welcome Back!</Text>
+          <Text style={styles.welcomeText}>
+            Welcome Back{userSettings?.name ? `, ${userSettings.name}` : ""}!
+          </Text>
           <Text style={styles.subtitle}>Let's crush your goals today</Text>
         </View>
-        <Avatar initials="JD" size={48} />
+        <Avatar
+          initials={
+            userSettings?.name
+              ? userSettings.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2)
+              : "FX"
+          }
+          size={48}
+        />
       </View>
 
       {/* AI Assistant Chat */}
@@ -279,33 +294,12 @@ export function DashboardScreen() {
               <Text style={styles.healthLabel}>Sleep</Text>
               <Text style={styles.healthStatus}>Good</Text>
             </View>
-
-            <View
-              style={[
-                styles.healthCard,
-                { backgroundColor: colors.orange[50] },
-              ]}
-            >
-              <Ionicons name="flash" size={28} color={colors.orange[500]} />
-              <Text style={styles.healthValue}>85%</Text>
-              <Text style={styles.healthLabel}>Energy</Text>
-              <Text style={styles.healthStatus}>High</Text>
-            </View>
-
-            <View
-              style={[styles.healthCard, { backgroundColor: colors.blue[50] }]}
-            >
-              <Ionicons name="bulb" size={28} color={colors.blue[500]} />
-              <Text style={styles.healthValue}>92%</Text>
-              <Text style={styles.healthLabel}>Focus</Text>
-              <Text style={styles.healthStatus}>Excellent</Text>
-            </View>
           </View>
         </CardContent>
       </Card>
 
       {/* Today's Goals */}
-      <Card style={[styles.section, styles.lastSection]}>
+      <Card style={styles.lastSection}>
         <CardHeader>
           <Text style={styles.cardTitle}>Today's Goals</Text>
         </CardHeader>
@@ -523,11 +517,10 @@ const styles = StyleSheet.create({
   },
   healthGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 12,
   },
   healthCard: {
-    width: "47%",
+    flex: 1,
     padding: 16,
     borderRadius: 12,
   },

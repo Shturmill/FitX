@@ -14,3 +14,25 @@ web-build/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# AsyncStorage
+.expo-shared/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+.cache/

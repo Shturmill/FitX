@@ -16,7 +16,7 @@ Backend
 
 AI/ML
 
-* Ptython (TensorFlow/PyTorch)
+* Python (TensorFlow/PyTorch)
 
 Основные функции приложения
 

@@ -1,45 +1,162 @@
-import React from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Card, CardHeader, CardContent, Progress, Avatar, Button } from '../components/ui';
-import { colors, gradients } from '../theme/colors';
+  Alert,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  Progress,
+  Avatar,
+  Button,
+} from "../components/ui";
+import { colors, gradients } from "../theme/colors";
+import { useAuth } from "../contexts/AuthContext";
+import { useFoodContext } from "../contexts/FoodContext";
+import { EditProfileModal } from "../components/EditProfileModal";
+import { UserSettings } from "../utils/storage";
 
 export function ProfileScreen() {
+  const { userSettings, logout, updateSettings } = useAuth();
+  const { reloadUserGoals } = useFoodContext();
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+
+  const handleEditProfile = () => {
+    setIsEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async (settings: UserSettings) => {
+    try {
+      await updateSettings(settings);
+      await reloadUserGoals(); // Reload food goals to reflect new settings
+      setIsEditModalVisible(false);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      throw error;
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await logout();
+          } catch (error) {
+            console.error("Logout error:", error);
+            Alert.alert("Error", "Failed to logout. Please try again.");
+          }
+        },
+      },
+    ]);
+  };
+
+  const calculateBMI = () => {
+    if (!userSettings) return "0.0";
+    const heightInMeters = userSettings.height / 100;
+    const bmi = userSettings.weight / (heightInMeters * heightInMeters);
+    return bmi.toFixed(1);
+  };
+
+  const getInitials = () => {
+    if (!userSettings?.name) return "FX";
+    return userSettings.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getGoalText = () => {
+    if (!userSettings) return "Maintain Weight";
+    const goalMap = {
+      lose_weight: "Lose Weight",
+      maintain: "Maintain Weight",
+      gain_weight: "Gain Weight",
+      gain_muscle: "Gain Muscle",
+    };
+    return goalMap[userSettings.goal];
+  };
+
+  const getActivityLevelText = () => {
+    if (!userSettings) return "Moderate";
+    const activityMap = {
+      sedentary: "Sedentary",
+      light: "Light",
+      moderate: "Moderate",
+      active: "Active",
+      very_active: "Very Active",
+    };
+    return activityMap[userSettings.activityLevel];
+  };
+
+  const getGenderText = () => {
+    if (!userSettings) return "Not Set";
+    return userSettings.gender === "male" ? "Male" : "Female";
+  };
+
+  if (!userSettings) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Profile Header Card */}
       <Card gradient={gradients.primary} style={styles.headerCard}>
         <View style={styles.headerTop}>
           <View style={styles.profileRow}>
-            <Avatar initials="JD" size={80} gradient={[colors.white, colors.gray[100]]} />
+            <Avatar
+              initials={getInitials()}
+              size={80}
+              gradient={[colors.white, colors.gray[100]]}
+            />
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>John Doe</Text>
+              <Text style={styles.profileName}>{userSettings.name}</Text>
               <Text style={styles.profileRole}>Fitness Enthusiast</Text>
-              <Text style={styles.profileSince}>Member since Jan 2025</Text>
+              <Text style={styles.profileSince}>
+                Member since{" "}
+                {new Date().toLocaleDateString("en-US", {
+                  month: "short",
+                  year: "numeric",
+                })}
+              </Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.editButton}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEditProfile}
+          >
             <Ionicons name="pencil" size={16} color={colors.white} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>68 kg</Text>
+            <Text style={styles.statValue}>{userSettings.weight} kg</Text>
             <Text style={styles.statLabel}>Weight</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>175 cm</Text>
+            <Text style={styles.statValue}>{userSettings.height} cm</Text>
             <Text style={styles.statLabel}>Height</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>23.5</Text>
+            <Text style={styles.statValue}>{calculateBMI()}</Text>
             <Text style={styles.statLabel}>BMI</Text>
           </View>
         </View>
@@ -55,14 +172,23 @@ export function ProfileScreen() {
         </CardHeader>
         <CardContent>
           <View style={styles.goalHeader}>
-            <Text style={styles.goalTitle}>Lose Weight</Text>
-            <Text style={styles.goalTarget}>68 kg → 65 kg</Text>
+            <Text style={styles.goalTitle}>{getGoalText()}</Text>
+            <Text style={styles.goalTarget}>
+              {userSettings.calorieGoal} cal/day
+            </Text>
           </View>
-          <Progress value={40} height={8} style={styles.goalProgress} />
-          <Text style={styles.goalSubtext}>40% Complete • 1.2 kg lost</Text>
+          <Progress value={65} height={8} style={styles.goalProgress} />
+          <Text style={styles.goalSubtext}>Daily calorie target</Text>
           <View style={styles.targetDateRow}>
-            <Ionicons name="calendar-outline" size={16} color={colors.gray[500]} />
-            <Text style={styles.targetDate}>Target date: March 15, 2025</Text>
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={colors.gray[500]}
+            />
+            <Text style={styles.targetDate}>
+              Protein: {userSettings.proteinGoal}g • Carbs:{" "}
+              {userSettings.carbsGoal}g • Fats: {userSettings.fatsGoal}g
+            </Text>
           </View>
         </CardContent>
       </Card>
@@ -71,28 +197,49 @@ export function ProfileScreen() {
       <Card style={styles.section}>
         <CardHeader>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="trending-up" size={20} color={colors.primary[600]} />
+            <Ionicons
+              name="trending-up"
+              size={20}
+              color={colors.primary[600]}
+            />
             <Text style={styles.cardTitle}>Monthly Statistics</Text>
           </View>
         </CardHeader>
         <CardContent>
           <View style={styles.monthlyGrid}>
-            <View style={[styles.monthlyCard, { backgroundColor: colors.orange[50] }]}>
+            <View
+              style={[
+                styles.monthlyCard,
+                { backgroundColor: colors.orange[50] },
+              ]}
+            >
               <Text style={styles.monthlyLabel}>Workouts</Text>
               <Text style={styles.monthlyValue}>18</Text>
               <Text style={styles.monthlyChange}>+3 from last month</Text>
             </View>
-            <View style={[styles.monthlyCard, { backgroundColor: colors.blue[50] }]}>
+            <View
+              style={[styles.monthlyCard, { backgroundColor: colors.blue[50] }]}
+            >
               <Text style={styles.monthlyLabel}>Active Days</Text>
               <Text style={styles.monthlyValue}>22</Text>
               <Text style={styles.monthlyChange}>+5 from last month</Text>
             </View>
-            <View style={[styles.monthlyCard, { backgroundColor: colors.green[50] }]}>
+            <View
+              style={[
+                styles.monthlyCard,
+                { backgroundColor: colors.green[50] },
+              ]}
+            >
               <Text style={styles.monthlyLabel}>Avg. Calories</Text>
               <Text style={styles.monthlyValue}>1,850</Text>
               <Text style={styles.monthlyNote}>Daily average</Text>
             </View>
-            <View style={[styles.monthlyCard, { backgroundColor: colors.purple[500] + '15' }]}>
+            <View
+              style={[
+                styles.monthlyCard,
+                { backgroundColor: colors.purple[500] + "15" },
+              ]}
+            >
               <Text style={styles.monthlyLabel}>Active Time</Text>
               <Text style={styles.monthlyValue}>42 hrs</Text>
               <Text style={styles.monthlyChange}>+8 hrs from last month</Text>
@@ -110,33 +257,69 @@ export function ProfileScreen() {
           </View>
         </CardHeader>
         <CardContent>
-          <View style={[styles.achievementItem, { backgroundColor: colors.yellow[50] }]}>
-            <View style={[styles.achievementIcon, { backgroundColor: colors.orange[400] }]}>
+          <View
+            style={[
+              styles.achievementItem,
+              { backgroundColor: colors.yellow[50] },
+            ]}
+          >
+            <View
+              style={[
+                styles.achievementIcon,
+                { backgroundColor: colors.orange[400] },
+              ]}
+            >
               <Text style={styles.achievementEmoji}>🔥</Text>
             </View>
             <View style={styles.achievementInfo}>
               <Text style={styles.achievementTitle}>7 Day Streak</Text>
-              <Text style={styles.achievementDesc}>Completed workouts 7 days in a row</Text>
+              <Text style={styles.achievementDesc}>
+                Completed workouts 7 days in a row
+              </Text>
             </View>
           </View>
 
-          <View style={[styles.achievementItem, { backgroundColor: colors.blue[50] }]}>
-            <View style={[styles.achievementIcon, { backgroundColor: colors.blue[400] }]}>
+          <View
+            style={[
+              styles.achievementItem,
+              { backgroundColor: colors.blue[50] },
+            ]}
+          >
+            <View
+              style={[
+                styles.achievementIcon,
+                { backgroundColor: colors.blue[400] },
+              ]}
+            >
               <Text style={styles.achievementEmoji}>💪</Text>
             </View>
             <View style={styles.achievementInfo}>
               <Text style={styles.achievementTitle}>First 10K</Text>
-              <Text style={styles.achievementDesc}>Reached 10,000 steps milestone</Text>
+              <Text style={styles.achievementDesc}>
+                Reached 10,000 steps milestone
+              </Text>
             </View>
           </View>
 
-          <View style={[styles.achievementItem, { backgroundColor: colors.green[50] }]}>
-            <View style={[styles.achievementIcon, { backgroundColor: colors.green[400] }]}>
+          <View
+            style={[
+              styles.achievementItem,
+              { backgroundColor: colors.green[50] },
+            ]}
+          >
+            <View
+              style={[
+                styles.achievementIcon,
+                { backgroundColor: colors.green[400] },
+              ]}
+            >
               <Text style={styles.achievementEmoji}>🎯</Text>
             </View>
             <View style={styles.achievementInfo}>
               <Text style={styles.achievementTitle}>Goal Achiever</Text>
-              <Text style={styles.achievementDesc}>Met weekly calorie goals</Text>
+              <Text style={styles.achievementDesc}>
+                Met weekly calorie goals
+              </Text>
             </View>
           </View>
         </CardContent>
@@ -150,32 +333,39 @@ export function ProfileScreen() {
         <CardContent>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Age</Text>
-            <Text style={styles.infoValue}>28 years</Text>
+            <Text style={styles.infoValue}>{userSettings.age} years</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Gender</Text>
-            <Text style={styles.infoValue}>Male</Text>
+            <Text style={styles.infoValue}>{getGenderText()}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Activity Level</Text>
-            <Text style={styles.infoValue}>Moderately Active</Text>
+            <Text style={styles.infoValue}>{getActivityLevelText()}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastInfoRow]}>
             <Text style={styles.infoLabel}>Goal Type</Text>
-            <Text style={styles.infoValue}>Weight Loss</Text>
+            <Text style={styles.infoValue}>{getGoalText()}</Text>
           </View>
         </CardContent>
       </Card>
 
       {/* Actions */}
       <View style={[styles.actionsRow, styles.lastSection]}>
-        <Button variant="outline" style={styles.actionButton}>
-          Edit Profile
-        </Button>
-        <Button variant="outline" style={styles.actionButton}>
-          Settings
-        </Button>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={colors.red[500]} />
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
       </View>
+
+      {userSettings && (
+        <EditProfileModal
+          visible={isEditModalVisible}
+          onClose={() => setIsEditModalVisible(false)}
+          onSave={handleSaveProfile}
+          currentSettings={userSettings}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -183,21 +373,31 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: "#EEF2FF",
     paddingHorizontal: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#EEF2FF",
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.gray[600],
   },
   headerCard: {
     marginTop: 16,
   },
   headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 24,
   },
   profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   profileInfo: {
@@ -205,39 +405,39 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.white,
   },
   profileRole: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    color: "rgba(255,255,255,0.9)",
     marginTop: 4,
   },
   profileSince: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
+    color: "rgba(255,255,255,0.75)",
     marginTop: 4,
   },
   editButton: {
     padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 8,
   },
   statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
   },
   statItem: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.white,
   },
   statLabel: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    color: "rgba(255,255,255,0.9)",
     marginTop: 4,
   },
   section: {
@@ -247,29 +447,29 @@ const styles = StyleSheet.create({
     marginBottom: 100,
   },
   cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray[900],
   },
   goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   goalTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
     color: colors.gray[700],
   },
   goalTarget: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray[900],
   },
   goalProgress: {
@@ -281,8 +481,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   targetDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   targetDate: {
@@ -290,12 +490,12 @@ const styles = StyleSheet.create({
     color: colors.gray[600],
   },
   monthlyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
   },
   monthlyCard: {
-    width: '47%',
+    width: "47%",
     padding: 16,
     borderRadius: 12,
   },
@@ -305,7 +505,7 @@ const styles = StyleSheet.create({
   },
   monthlyValue: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.gray[900],
     marginTop: 4,
   },
@@ -320,8 +520,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   achievementItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     borderRadius: 12,
     marginBottom: 12,
@@ -330,8 +530,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   achievementEmoji: {
@@ -342,7 +542,7 @@ const styles = StyleSheet.create({
   },
   achievementTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.gray[900],
   },
   achievementDesc: {
@@ -351,8 +551,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray[100],
@@ -366,15 +566,26 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: colors.gray[900],
   },
   actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
     marginTop: 16,
   },
-  actionButton: {
-    flex: 1,
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.red[50],
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.red[400],
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.red[500],
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
 } from "../components/ui";
 import { colors, gradients } from "../theme/colors";
 import { useFoodContext } from "../contexts/FoodContext";
-import { Product } from "../utils/storage";
+import { Product, storageUtils } from "../utils/storage";
 
 interface MealSection {
   title: string;
@@ -39,6 +39,10 @@ export function FoodDiaryScreen() {
     getTotalFats,
     getCategoryCalories,
     getMealsByCategory,
+    calorieGoal,
+    proteinGoal,
+    carbsGoal,
+    fatsGoal,
   } = useFoodContext();
 
   const [isAddingMeal, setIsAddingMeal] = useState(false);
@@ -52,6 +56,44 @@ export function FoodDiaryScreen() {
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fats, setFats] = useState("");
+
+  // Water intake state
+  const [waterGlasses, setWaterGlasses] = useState(0);
+
+  // Category-specific suggestions
+  const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+
+  // Load water intake on mount
+  useEffect(() => {
+    loadWaterIntake();
+  }, []);
+
+  // Load category-specific products when modal opens
+  useEffect(() => {
+    if (isAddingMeal) {
+      loadCategoryProducts();
+    }
+  }, [isAddingMeal, selectedCategory]);
+
+  const loadWaterIntake = async () => {
+    const waterIntake = await storageUtils.getWaterIntake();
+    setWaterGlasses(waterIntake.glasses);
+  };
+
+  const loadCategoryProducts = async () => {
+    const products = await storageUtils.getProductsByCategory(selectedCategory);
+    setCategoryProducts(products);
+  };
+
+  const handleAddWater = async () => {
+    const newGlasses = await storageUtils.incrementWater();
+    setWaterGlasses(newGlasses);
+  };
+
+  const handleRemoveWater = async () => {
+    const newGlasses = await storageUtils.decrementWater();
+    setWaterGlasses(newGlasses);
+  };
 
   const mealSections: MealSection[] = [
     {
@@ -77,7 +119,6 @@ export function FoodDiaryScreen() {
   ];
 
   const totalCalories = getTotalCalories();
-  const calorieGoal = 2000;
   const totalProtein = getTotalProtein();
   const totalCarbs = getTotalCarbs();
   const totalFats = getTotalFats();
@@ -95,6 +136,17 @@ export function FoodDiaryScreen() {
     setProtein(product.protein.toString());
     setCarbs(product.carbs.toString());
     setFats(product.fats.toString());
+  };
+
+  const handleSelectCategoryProduct = (product: Product) => {
+    handleSelectProduct(product);
+  };
+
+  const searchCategoryProducts = async (query: string): Promise<Product[]> => {
+    if (!query.trim()) return [];
+    const allProducts = await searchProducts(query);
+    // Filter by category or return all
+    return allProducts;
   };
 
   const handleAddMeal = async () => {
@@ -200,7 +252,11 @@ export function FoodDiaryScreen() {
                 <Text style={styles.macroValue}>{totalProtein}g</Text>
               </View>
               <Text style={styles.macroLabel}>Protein</Text>
-              <Progress value={75} height={4} style={styles.macroProgress} />
+              <Progress
+                value={(totalProtein / proteinGoal) * 100}
+                height={4}
+                style={styles.macroProgress}
+              />
             </View>
 
             <View style={styles.macroItem}>
@@ -213,7 +269,11 @@ export function FoodDiaryScreen() {
                 <Text style={styles.macroValue}>{totalCarbs}g</Text>
               </View>
               <Text style={styles.macroLabel}>Carbs</Text>
-              <Progress value={60} height={4} style={styles.macroProgress} />
+              <Progress
+                value={(totalCarbs / carbsGoal) * 100}
+                height={4}
+                style={styles.macroProgress}
+              />
             </View>
 
             <View style={styles.macroItem}>
@@ -226,7 +286,11 @@ export function FoodDiaryScreen() {
                 <Text style={styles.macroValue}>{totalFats}g</Text>
               </View>
               <Text style={styles.macroLabel}>Fats</Text>
-              <Progress value={65} height={4} style={styles.macroProgress} />
+              <Progress
+                value={(totalFats / fatsGoal) * 100}
+                height={4}
+                style={styles.macroProgress}
+              />
             </View>
           </View>
         </CardContent>
@@ -319,23 +383,79 @@ export function FoodDiaryScreen() {
       })}
 
       {/* Water Intake */}
-      <Card style={[styles.section, styles.lastSection]}>
+      <Card style={styles.lastSection}>
         <CardHeader>
-          <Text style={styles.cardTitle}>Water Intake</Text>
+          <View style={styles.waterHeaderRow}>
+            <Text style={styles.cardTitle}>Water Intake</Text>
+            <Text style={styles.waterInfo}>1 glass = 250ml</Text>
+          </View>
         </CardHeader>
         <CardContent>
           <View style={styles.waterGrid}>
-            {[...Array(8)].map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.waterGlass,
-                  i < 6 ? styles.waterFilled : styles.waterEmpty,
-                ]}
-              />
-            ))}
+            {[...Array(8)].map((_, i) => {
+              const isFilled = i < waterGlasses;
+              const isNext = i === waterGlasses && waterGlasses < 8;
+              const isLast = i === waterGlasses - 1 && waterGlasses > 0;
+
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    styles.waterGlassContainer,
+                    isFilled && styles.waterGlassContainerFilled,
+                    isLast && styles.waterGlassContainerLast,
+                  ]}
+                  onPress={
+                    isNext
+                      ? handleAddWater
+                      : isLast
+                        ? handleRemoveWater
+                        : undefined
+                  }
+                  disabled={!isNext && !isLast}
+                  activeOpacity={isNext || isLast ? 0.7 : 1}
+                >
+                  {isNext ? (
+                    <View style={styles.waterGlassPlus}>
+                      <Ionicons name="add" size={24} color={colors.blue[500]} />
+                    </View>
+                  ) : isLast ? (
+                    <View style={styles.waterGlassContent}>
+                      <Ionicons
+                        name="water"
+                        size={32}
+                        color={colors.blue[500]}
+                      />
+                      <View style={styles.removeIcon}>
+                        <Ionicons
+                          name="close"
+                          size={16}
+                          color={colors.red[500]}
+                        />
+                      </View>
+                    </View>
+                  ) : (
+                    <Ionicons
+                      name={isFilled ? "water" : "water-outline"}
+                      size={32}
+                      color={isFilled ? colors.blue[500] : colors.gray[400]}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.waterGlassLabel,
+                      isFilled && styles.waterGlassLabelFilled,
+                    ]}
+                  >
+                    {(i + 1) * 250}ml
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          <Text style={styles.waterText}>6 / 8 glasses</Text>
+          <Text style={styles.waterText}>
+            {waterGlasses} / 8 glasses ({waterGlasses * 250}ml / 2000ml)
+          </Text>
         </CardContent>
       </Card>
 
@@ -357,13 +477,56 @@ export function FoodDiaryScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Category-specific recent products */}
+              {categoryProducts.length > 0 && !mealName && (
+                <View style={styles.recentProductsContainer}>
+                  <Text style={styles.recentProductsTitle}>
+                    Recent{" "}
+                    {
+                      mealSections.find((s) => s.category === selectedCategory)
+                        ?.title
+                    }
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {categoryProducts.map((product) => (
+                      <TouchableOpacity
+                        key={product.id}
+                        style={styles.recentProductCard}
+                        onPress={() => handleSelectCategoryProduct(product)}
+                      >
+                        <Text
+                          style={styles.recentProductName}
+                          numberOfLines={2}
+                        >
+                          {product.name}
+                        </Text>
+                        <Text style={styles.recentProductCalories}>
+                          {product.calories} cal
+                        </Text>
+                        <View style={styles.recentProductMacros}>
+                          <Text style={styles.recentProductMacro}>
+                            P:{product.protein}g
+                          </Text>
+                          <Text style={styles.recentProductMacro}>
+                            C:{product.carbs}g
+                          </Text>
+                          <Text style={styles.recentProductMacro}>
+                            F:{product.fats}g
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <AutocompleteInput
                 label="Search or Enter Meal Name"
                 placeholder="e.g., Grilled Chicken"
                 value={mealName}
                 onChangeText={setMealName}
                 onSelectProduct={handleSelectProduct}
-                onSearch={searchProducts}
+                onSearch={searchCategoryProducts}
                 containerStyle={styles.inputContainer}
               />
 
@@ -625,26 +788,84 @@ const styles = StyleSheet.create({
     color: colors.primary[600],
     fontWeight: "500",
   },
+  waterHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  waterInfo: {
+    fontSize: 12,
+    color: colors.gray[500],
+    fontStyle: "italic",
+  },
   waterGrid: {
     flexDirection: "row",
-    gap: 8,
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "center",
   },
-  waterGlass: {
-    flex: 1,
-    height: 48,
-    borderRadius: 8,
+  waterGlassContainer: {
+    width: 70,
+    height: 90,
+    borderRadius: 12,
+    backgroundColor: colors.gray[50],
+    borderWidth: 2,
+    borderColor: colors.gray[200],
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
   },
-  waterFilled: {
-    backgroundColor: colors.blue[400],
+  waterGlassContainerFilled: {
+    backgroundColor: colors.blue[50],
+    borderColor: colors.blue[500],
   },
-  waterEmpty: {
-    backgroundColor: colors.gray[200],
+  waterGlassContainerLast: {
+    borderColor: colors.red[400],
+    borderWidth: 2,
+  },
+  waterGlassContent: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeIcon: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.red[500],
+  },
+  waterGlassPlus: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.blue[50],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  waterGlassLabel: {
+    fontSize: 11,
+    color: colors.gray[500],
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  waterGlassLabelFilled: {
+    color: colors.blue[500],
   },
   waterText: {
     fontSize: 14,
     color: colors.gray[600],
     textAlign: "center",
-    marginTop: 12,
+    marginTop: 16,
+    fontWeight: "500",
   },
   modalOverlay: {
     flex: 1,
@@ -690,5 +911,43 @@ const styles = StyleSheet.create({
   },
   addDiaryButton: {
     flex: 2,
+  },
+  recentProductsContainer: {
+    marginBottom: 20,
+  },
+  recentProductsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.gray[700],
+    marginBottom: 12,
+  },
+  recentProductCard: {
+    width: 120,
+    backgroundColor: colors.gray[50],
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  recentProductName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray[900],
+    marginBottom: 6,
+    height: 36,
+  },
+  recentProductCalories: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.primary[600],
+    marginBottom: 8,
+  },
+  recentProductMacros: {
+    gap: 4,
+  },
+  recentProductMacro: {
+    fontSize: 11,
+    color: colors.gray[600],
   },
 });

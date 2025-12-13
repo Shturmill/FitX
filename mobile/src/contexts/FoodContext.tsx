@@ -21,6 +21,10 @@ export interface Meal {
 interface FoodContextType {
   meals: Meal[];
   products: Product[];
+  calorieGoal: number;
+  proteinGoal: number;
+  carbsGoal: number;
+  fatsGoal: number;
   addMeal: (meal: Omit<Meal, "id">) => Promise<void>;
   removeMeal: (id: string) => void;
   searchProducts: (query: string) => Promise<Product[]>;
@@ -31,11 +35,17 @@ interface FoodContextType {
   getMealsByCategory: (category: string) => Meal[];
   getCategoryCalories: (category: string) => number;
   loadProductHistory: () => Promise<void>;
+  reloadUserGoals: () => Promise<void>;
 }
 
 const FoodContext = createContext<FoodContextType | undefined>(undefined);
 
 export function FoodProvider({ children }: { children: ReactNode }) {
+  const [calorieGoal, setCalorieGoal] = useState(2000);
+  const [proteinGoal, setProteinGoal] = useState(150);
+  const [carbsGoal, setCarbsGoal] = useState(200);
+  const [fatsGoal, setFatsGoal] = useState(65);
+
   const [meals, setMeals] = useState<Meal[]>([
     // Default sample data
     {
@@ -102,10 +112,21 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Load product history on mount
+  // Load product history and user goals on mount
   useEffect(() => {
     loadProductHistory();
+    loadUserGoals();
   }, []);
+
+  const loadUserGoals = async () => {
+    const settings = await storageUtils.getUserSettings();
+    if (settings) {
+      setCalorieGoal(settings.calorieGoal);
+      setProteinGoal(settings.proteinGoal);
+      setCarbsGoal(settings.carbsGoal);
+      setFatsGoal(settings.fatsGoal);
+    }
+  };
 
   const loadProductHistory = async () => {
     const history = await storageUtils.getProductHistory();
@@ -120,13 +141,14 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
     setMeals((prev) => [...prev, newMeal]);
 
-    // Save product to history
+    // Save product to history with category
     await storageUtils.saveProduct({
       name: meal.name,
       calories: meal.calories,
       protein: meal.protein,
       carbs: meal.carbs,
       fats: meal.fats,
+      category: meal.category,
     });
 
     // Reload product history
@@ -173,6 +195,10 @@ export function FoodProvider({ children }: { children: ReactNode }) {
       value={{
         meals,
         products,
+        calorieGoal,
+        proteinGoal,
+        carbsGoal,
+        fatsGoal,
         addMeal,
         removeMeal,
         searchProducts,
@@ -183,6 +209,7 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         getMealsByCategory,
         getCategoryCalories,
         loadProductHistory,
+        reloadUserGoals: loadUserGoals,
       }}
     >
       {children}
