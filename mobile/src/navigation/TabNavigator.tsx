@@ -5,10 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   DashboardScreen,
   FoodDiaryScreen,
-  TrainingScreen,
   AchievementsScreen,
   ProfileScreen,
 } from "../screens";
+import { TrainingStackNavigator } from "./TrainingStackNavigator";
 import { colors } from "../theme/colors";
 import { TabParamList } from "./RootNavigator";
 
@@ -50,7 +50,7 @@ export function TabNavigator() {
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="Diary" component={FoodDiaryScreen} />
-      <Tab.Screen name="Training" component={TrainingScreen} />
+      <Tab.Screen name="Training" component={TrainingStackNavigator} />
       <Tab.Screen name="Awards" component={AchievementsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

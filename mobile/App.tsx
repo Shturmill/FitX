@@ -5,6 +5,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { FoodProvider } from "./src/contexts/FoodContext";
+import { TrainingProvider } from "./src/contexts/TrainingContext";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { colors } from "./src/theme/colors";
@@ -37,7 +38,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <FoodProvider>
-          <AppContent />
+          <TrainingProvider>
+            <AppContent />
+          </TrainingProvider>
         </FoodProvider>
       </AuthProvider>
     </SafeAreaProvider>
