@@ -2,6 +2,8 @@ export const colors = {
   primary: {
     50: '#EEF2FF',
     100: '#E0E7FF',
+    200: '#C7D2FE',
+    300: '#A5B4FC',
     500: '#6366F1',
     600: '#4F46E5',
     700: '#4338CA',
@@ -14,10 +16,12 @@ export const colors = {
     50: '#F9FAFB',
     100: '#F3F4F6',
     200: '#E5E7EB',
+    300: '#D1D5DB',
     400: '#9CA3AF',
     500: '#6B7280',
     600: '#4B5563',
     700: '#374151',
+    800: '#1F2937',
     900: '#111827',
   },
   green: {
@@ -33,6 +37,7 @@ export const colors = {
   },
   orange: {
     50: '#FFF7ED',
+    200: '#FED7AA',
     400: '#FB923C',
     500: '#F97316',
   },
@@ -44,6 +49,7 @@ export const colors = {
   },
   blue: {
     50: '#EFF6FF',
+    200: '#BFDBFE',
     400: '#60A5FA',
     500: '#3B82F6',
   },

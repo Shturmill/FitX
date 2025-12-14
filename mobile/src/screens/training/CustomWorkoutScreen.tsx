@@ -18,7 +18,7 @@ import { Card, Button, Badge } from "../../components/ui";
 import { colors } from "../../theme/colors";
 import { useTraining } from "../../contexts/TrainingContext";
 import { TrainingStackParamList } from "../../navigation/TrainingStackNavigator";
-import { Exercise, WorkoutProgram, workoutStorage } from "../../utils/workoutStorage";
+import { Exercise, WorkoutProgram, workoutStorage, WORKOUT_CATEGORIES, WorkoutCategory } from "../../utils/workoutStorage";
 
 type NavigationProp = NativeStackNavigationProp<TrainingStackParamList, "CustomWorkout">;
 type RouteProps = RouteProp<TrainingStackParamList, "CustomWorkout">;
@@ -55,7 +55,9 @@ export function CustomWorkoutScreen() {
   const [difficulty, setDifficulty] = useState<"beginner" | "intermediate" | "advanced">(
     editProgram?.difficulty || "beginner"
   );
-  const [category, setCategory] = useState(editProgram?.category || "strength");
+  const [category, setCategory] = useState<WorkoutCategory>(
+    (editProgram?.category?.toLowerCase() as WorkoutCategory) || "strength"
+  );
   const [exercises, setExercises] = useState<Exercise[]>(editProgram?.exercises || []);
 
   // Exercise modal state
@@ -63,18 +65,39 @@ export function CustomWorkoutScreen() {
   const [editingExerciseIndex, setEditingExerciseIndex] = useState<number | null>(null);
   const [exerciseForm, setExerciseForm] = useState<ExerciseFormData>(emptyExercise);
 
+  // Recent exercises state
+  const [recentExercises, setRecentExercises] = useState<Exercise[]>([]);
+  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+
+  // Load recent exercises on mount
+  useEffect(() => {
+    loadRecentExercises();
+  }, []);
+
+  const loadRecentExercises = async () => {
+    const recent = await workoutStorage.getRecentExercises();
+    setRecentExercises(recent);
+  };
+
   const difficulties = [
     { value: "beginner", label: "Beginner", color: colors.green[500] },
     { value: "intermediate", label: "Intermediate", color: colors.yellow[500] },
     { value: "advanced", label: "Advanced", color: colors.red[500] },
   ];
 
-  const categories = ["strength", "cardio", "hiit", "core", "flexibility", "full body"];
+  // Category options with icons from WORKOUT_CATEGORIES
+  const categoryOptions = Object.entries(WORKOUT_CATEGORIES).map(([key, config]) => ({
+    value: key as WorkoutCategory,
+    label: config.label,
+    icon: config.icon,
+    color: config.color,
+  }));
 
   const handleAddExercise = () => {
     setEditingExerciseIndex(null);
     setExerciseForm(emptyExercise);
     setShowExerciseModal(true);
+    setShowRecentDropdown(true);
   };
 
   const handleEditExercise = (index: number) => {
@@ -90,6 +113,7 @@ export function CustomWorkoutScreen() {
       isTimeBased: !!exercise.duration,
     });
     setShowExerciseModal(true);
+    setShowRecentDropdown(false);
   };
 
   const handleDeleteExercise = (index: number) => {
@@ -107,7 +131,20 @@ export function CustomWorkoutScreen() {
     ]);
   };
 
-  const handleSaveExercise = () => {
+  const handleSelectRecentExercise = (exercise: Exercise) => {
+    setExerciseForm({
+      name: exercise.name,
+      sets: exercise.sets.toString(),
+      reps: exercise.reps?.toString() || "",
+      duration: exercise.duration?.toString() || "30",
+      restTime: exercise.restTime.toString(),
+      weight: exercise.weight?.toString() || "",
+      isTimeBased: !!exercise.duration,
+    });
+    setShowRecentDropdown(false);
+  };
+
+  const handleSaveExercise = async () => {
     if (!exerciseForm.name.trim()) {
       Alert.alert("Error", "Please enter an exercise name");
       return;
@@ -133,10 +170,14 @@ export function CustomWorkoutScreen() {
       setExercises(newExercises);
     } else {
       setExercises([...exercises, newExercise]);
+      // Add to recent exercises
+      await workoutStorage.addRecentExercise(newExercise);
+      await loadRecentExercises();
     }
 
     setShowExerciseModal(false);
     setExerciseForm(emptyExercise);
+    setShowRecentDropdown(false);
   };
 
   const handleMoveExercise = (index: number, direction: "up" | "down") => {
@@ -151,7 +192,7 @@ export function CustomWorkoutScreen() {
   const calculateDuration = () => {
     let totalSeconds = 0;
     exercises.forEach((ex) => {
-      const exerciseTime = ex.duration ? ex.duration * ex.sets : ex.sets * 45; // 45s per rep-based set
+      const exerciseTime = ex.duration ? ex.duration * ex.sets : ex.sets * 45;
       const restTime = ex.restTime * (ex.sets - 1);
       totalSeconds += exerciseTime + restTime;
     });
@@ -169,29 +210,62 @@ export function CustomWorkoutScreen() {
       return;
     }
 
+    // Check for duplicate name
+    const isDuplicate = await workoutStorage.checkDuplicateName(
+      programName.trim(),
+      editProgram?.id
+    );
+
+    if (isDuplicate) {
+      Alert.alert(
+        "Duplicate Name",
+        "A workout plan with this name already exists. Please choose a different name."
+      );
+      return;
+    }
+
+    const isUpdate = !!editProgram;
+
     const program: WorkoutProgram = {
       id: editProgram?.id || `custom-${Date.now()}`,
       name: programName.trim(),
-      description: programDescription.trim() || `Custom ${category} workout`,
+      description: programDescription.trim() || `Custom ${WORKOUT_CATEGORIES[category].label} workout`,
       difficulty,
       duration: calculateDuration(),
       category,
       exercises,
     };
 
-    await workoutStorage.saveProgram(program);
+    const result = await workoutStorage.saveProgram(program);
+
+    if (!result.success) {
+      Alert.alert("Error", "Failed to save workout plan. Please try again.");
+      return;
+    }
+
+    // Save all exercises as recent
+    await workoutStorage.addRecentExercisesFromProgram(exercises);
+
     await loadPrograms();
 
-    Alert.alert("Success", editProgram ? "Workout updated!" : "Workout created!", [
-      { text: "OK", onPress: () => navigation.goBack() },
-    ]);
+    // Clear save indication
+    const actionText = result.isUpdate ? "updated" : "created";
+    Alert.alert(
+      result.isUpdate ? "Workout Updated" : "Workout Created",
+      `"${program.name}" has been successfully ${actionText}!`,
+      [{ text: "OK", onPress: () => navigation.goBack() }]
+    );
   };
 
   const formatExerciseTarget = (exercise: Exercise) => {
     if (exercise.duration) {
-      return `${exercise.sets} sets × ${exercise.duration}s`;
+      return `${exercise.sets} sets x ${exercise.duration}s`;
     }
-    return `${exercise.sets} sets × ${exercise.reps} reps`;
+    return `${exercise.sets} sets x ${exercise.reps} reps`;
+  };
+
+  const getCategoryConfig = (cat: WorkoutCategory) => {
+    return WORKOUT_CATEGORIES[cat] || { label: cat, icon: "fitness-outline", color: colors.gray[500] };
   };
 
   return (
@@ -270,23 +344,28 @@ export function CustomWorkoutScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.optionsRow}>
-                  {categories.map((c) => (
+                <View style={styles.categoryOptionsRow}>
+                  {categoryOptions.map((c) => (
                     <TouchableOpacity
-                      key={c}
+                      key={c.value}
                       style={[
-                        styles.optionButton,
-                        category === c && styles.optionButtonActive,
+                        styles.categoryOption,
+                        category === c.value && { backgroundColor: c.color },
                       ]}
-                      onPress={() => setCategory(c)}
+                      onPress={() => setCategory(c.value)}
                     >
+                      <Ionicons
+                        name={c.icon as any}
+                        size={18}
+                        color={category === c.value ? colors.white : c.color}
+                      />
                       <Text
                         style={[
-                          styles.optionText,
-                          category === c && styles.optionTextActive,
+                          styles.categoryOptionText,
+                          category === c.value && styles.categoryOptionTextActive,
                         ]}
                       >
-                        {c.charAt(0).toUpperCase() + c.slice(1)}
+                        {c.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -326,6 +405,8 @@ export function CustomWorkoutScreen() {
                       style={styles.actionButton}
                       onPress={() => handleMoveExercise(index, "up")}
                       disabled={index === 0}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons
                         name="chevron-up"
@@ -337,6 +418,8 @@ export function CustomWorkoutScreen() {
                       style={styles.actionButton}
                       onPress={() => handleMoveExercise(index, "down")}
                       disabled={index === exercises.length - 1}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons
                         name="chevron-down"
@@ -347,12 +430,16 @@ export function CustomWorkoutScreen() {
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => handleEditExercise(index)}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Ionicons name="pencil" size={18} color={colors.primary[600]} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => handleDeleteExercise(index)}
+                      activeOpacity={0.6}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Ionicons name="trash-outline" size={18} color={colors.red[500]} />
                     </TouchableOpacity>
@@ -385,6 +472,40 @@ export function CustomWorkoutScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Recent Exercises Dropdown */}
+              {showRecentDropdown && recentExercises.length > 0 && editingExerciseIndex === null && (
+                <View style={styles.recentSection}>
+                  <Text style={styles.recentLabel}>Recent Exercises</Text>
+                  <ScrollView
+                    style={styles.recentList}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={true}
+                  >
+                    {recentExercises.map((exercise, index) => (
+                      <TouchableOpacity
+                        key={`${exercise.id}-${index}`}
+                        style={styles.recentItem}
+                        onPress={() => handleSelectRecentExercise(exercise)}
+                      >
+                        <View style={styles.recentItemContent}>
+                          <Text style={styles.recentItemName}>{exercise.name}</Text>
+                          <Text style={styles.recentItemDetails}>
+                            {formatExerciseTarget(exercise)}
+                            {exercise.weight ? ` - ${exercise.weight}kg` : ""}
+                          </Text>
+                        </View>
+                        <Ionicons name="add-circle-outline" size={20} color={colors.primary[600]} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or create new</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                </View>
+              )}
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Exercise Name *</Text>
                 <TextInput
@@ -623,6 +744,30 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: colors.white,
   },
+  categoryOptionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingRight: 16,
+  },
+  categoryOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.gray[100],
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray[700],
+  },
+  categoryOptionTextActive: {
+    color: colors.white,
+  },
   exercisesHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -729,7 +874,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: "80%",
+    maxHeight: "85%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -741,6 +886,60 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: colors.gray[900],
+  },
+  // Recent exercises styles
+  recentSection: {
+    marginBottom: 16,
+  },
+  recentLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray[700],
+    marginBottom: 8,
+  },
+  recentList: {
+    maxHeight: 180,
+    backgroundColor: colors.gray[50],
+    borderRadius: 12,
+    padding: 4,
+  },
+  recentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  recentItemContent: {
+    flex: 1,
+  },
+  recentItemName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.gray[900],
+  },
+  recentItemDetails: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginTop: 2,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.gray[200],
+  },
+  dividerText: {
+    fontSize: 13,
+    color: colors.gray[500],
+    marginHorizontal: 12,
   },
   inputRow: {
     flexDirection: "row",

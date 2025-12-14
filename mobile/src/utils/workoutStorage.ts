@@ -3,6 +3,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const WORKOUT_PROGRAMS_KEY = "@fitx_workout_programs";
 const WORKOUT_HISTORY_KEY = "@fitx_workout_history";
 const ACTIVE_SESSION_KEY = "@fitx_active_session";
+const RECENT_EXERCISES_KEY = "@fitx_recent_exercises";
+
+// Category configuration with icons and colors
+export const WORKOUT_CATEGORIES = {
+  strength: { label: "Strength", icon: "barbell", color: "#EF4444" },
+  cardio: { label: "Cardio", icon: "heart", color: "#F97316" },
+  hiit: { label: "HIIT", icon: "flash", color: "#EAB308" },
+  core: { label: "Core", icon: "fitness", color: "#22C55E" },
+  flexibility: { label: "Flexibility", icon: "body", color: "#3B82F6" },
+  "full body": { label: "Full Body", icon: "body-outline", color: "#A855F7" },
+} as const;
+
+export type WorkoutCategory = keyof typeof WORKOUT_CATEGORIES;
 
 // ============ Data Models ============
 
@@ -179,18 +192,46 @@ export const workoutStorage = {
     }
   },
 
-  async saveProgram(program: WorkoutProgram): Promise<void> {
+  async saveProgram(program: WorkoutProgram): Promise<{ success: boolean; isUpdate: boolean }> {
     try {
       const programs = await this.getPrograms();
       const existingIndex = programs.findIndex((p) => p.id === program.id);
-      if (existingIndex >= 0) {
+      const isUpdate = existingIndex >= 0;
+      if (isUpdate) {
         programs[existingIndex] = program;
       } else {
         programs.push(program);
       }
       await AsyncStorage.setItem(WORKOUT_PROGRAMS_KEY, JSON.stringify(programs));
+      return { success: true, isUpdate };
     } catch (error) {
       console.error("Error saving program:", error);
+      return { success: false, isUpdate: false };
+    }
+  },
+
+  async deleteProgram(programId: string): Promise<boolean> {
+    try {
+      const programs = await this.getPrograms();
+      const filteredPrograms = programs.filter((p) => p.id !== programId);
+      await AsyncStorage.setItem(WORKOUT_PROGRAMS_KEY, JSON.stringify(filteredPrograms));
+      return true;
+    } catch (error) {
+      console.error("Error deleting program:", error);
+      return false;
+    }
+  },
+
+  async checkDuplicateName(name: string, excludeId?: string): Promise<boolean> {
+    try {
+      const programs = await this.getPrograms();
+      const normalizedName = name.trim().toLowerCase();
+      return programs.some(
+        (p) => p.name.toLowerCase() === normalizedName && p.id !== excludeId
+      );
+    } catch (error) {
+      console.error("Error checking duplicate name:", error);
+      return false;
     }
   },
 
@@ -279,5 +320,42 @@ export const workoutStorage = {
       return secs > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${mins}:00`;
     }
     return `0:${secs.toString().padStart(2, "0")}`;
+  },
+
+  // Recent Exercises
+  async getRecentExercises(): Promise<Exercise[]> {
+    try {
+      const data = await AsyncStorage.getItem(RECENT_EXERCISES_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (error) {
+      console.error("Error loading recent exercises:", error);
+      return [];
+    }
+  },
+
+  async addRecentExercise(exercise: Exercise): Promise<void> {
+    try {
+      const recentExercises = await this.getRecentExercises();
+      // Remove duplicate if exists (by name)
+      const filtered = recentExercises.filter(
+        (e) => e.name.toLowerCase() !== exercise.name.toLowerCase()
+      );
+      // Add to beginning
+      filtered.unshift(exercise);
+      // Keep only last 20 recent exercises
+      const trimmed = filtered.slice(0, 20);
+      await AsyncStorage.setItem(RECENT_EXERCISES_KEY, JSON.stringify(trimmed));
+    } catch (error) {
+      console.error("Error adding recent exercise:", error);
+    }
+  },
+
+  async addRecentExercisesFromProgram(exercises: Exercise[]): Promise<void> {
+    for (const exercise of exercises) {
+      await this.addRecentExercise(exercise);
+    }
   },
 };

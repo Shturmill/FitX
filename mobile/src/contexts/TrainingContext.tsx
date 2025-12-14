@@ -16,6 +16,7 @@ interface TrainingContextType {
 
   // Program actions
   loadPrograms: () => Promise<void>;
+  deleteProgram: (programId: string) => Promise<boolean>;
 
   // History actions
   loadHistory: () => Promise<void>;
@@ -65,6 +66,14 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
   const loadPrograms = async () => {
     const loadedPrograms = await workoutStorage.getPrograms();
     setPrograms(loadedPrograms);
+  };
+
+  const deleteProgram = async (programId: string): Promise<boolean> => {
+    const success = await workoutStorage.deleteProgram(programId);
+    if (success) {
+      await loadPrograms();
+    }
+    return success;
   };
 
   const loadHistory = async () => {
@@ -284,6 +293,7 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
     activeSession,
     isLoading,
     loadPrograms,
+    deleteProgram,
     loadHistory,
     startWorkout,
     completeSet,
