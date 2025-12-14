@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,119 +15,20 @@ import {
   Badge,
 } from "../components/ui";
 import { colors, gradients } from "../theme/colors";
-
-interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  unlocked: boolean;
-  progress?: number;
-  total?: number;
-  date?: string;
-  category: "workout" | "nutrition" | "streak" | "milestone";
-}
+import { storageUtils, Achievement } from "../utils/storage";
 
 export function AchievementsScreen() {
   const [activeTab, setActiveTab] = useState<"unlocked" | "locked">("unlocked");
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
 
-  const achievements: Achievement[] = [
-    {
-      id: "1",
-      title: "First Step",
-      description: "Complete your first workout",
-      icon: "🎯",
-      unlocked: true,
-      date: "Nov 15, 2025",
-      category: "milestone",
-    },
-    {
-      id: "2",
-      title: "7 Day Streak",
-      description: "Work out 7 days in a row",
-      icon: "🔥",
-      unlocked: true,
-      date: "Nov 25, 2025",
-      category: "streak",
-    },
-    {
-      id: "3",
-      title: "Early Bird",
-      description: "Complete 5 morning workouts",
-      icon: "🌅",
-      unlocked: true,
-      date: "Nov 20, 2025",
-      category: "workout",
-    },
-    {
-      id: "4",
-      title: "Calorie Counter",
-      description: "Log meals for 7 consecutive days",
-      icon: "📊",
-      unlocked: true,
-      date: "Nov 28, 2025",
-      category: "nutrition",
-    },
-    {
-      id: "5",
-      title: "Century Club",
-      description: "Burn 100 calories in a single workout",
-      icon: "💯",
-      unlocked: true,
-      date: "Nov 16, 2025",
-      category: "workout",
-    },
-    {
-      id: "6",
-      title: "Iron Will",
-      description: "Complete 10 strength training sessions",
-      icon: "💪",
-      unlocked: false,
-      progress: 8,
-      total: 10,
-      category: "workout",
-    },
-    {
-      id: "7",
-      title: "Hydration Hero",
-      description: "Drink 8 glasses of water for 5 days",
-      icon: "💧",
-      unlocked: false,
-      progress: 3,
-      total: 5,
-      category: "nutrition",
-    },
-    {
-      id: "8",
-      title: "30 Day Warrior",
-      description: "Maintain a 30-day streak",
-      icon: "⚔️",
-      unlocked: false,
-      progress: 7,
-      total: 30,
-      category: "streak",
-    },
-    {
-      id: "9",
-      title: "Marathon Runner",
-      description: "Complete 100 workouts",
-      icon: "🏃",
-      unlocked: false,
-      progress: 18,
-      total: 100,
-      category: "milestone",
-    },
-    {
-      id: "10",
-      title: "Protein Pro",
-      description: "Meet protein goals for 7 days",
-      icon: "🥚",
-      unlocked: false,
-      progress: 4,
-      total: 7,
-      category: "nutrition",
-    },
-  ];
+  useEffect(() => {
+    loadAchievements();
+  }, []);
+
+  const loadAchievements = async () => {
+    const stored = await storageUtils.getAchievements();
+    setAchievements(stored);
+  };
 
   const unlockedAchievements = achievements.filter((a) => a.unlocked);
   const lockedAchievements = achievements.filter((a) => !a.unlocked);

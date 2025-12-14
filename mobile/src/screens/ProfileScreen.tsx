@@ -214,15 +214,15 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Workouts</Text>
-              <Text style={styles.monthlyValue}>18</Text>
-              <Text style={styles.monthlyChange}>+3 from last month</Text>
+              <Text style={styles.monthlyValue}>--</Text>
+              <Text style={styles.monthlyNote}>No data yet</Text>
             </View>
             <View
               style={[styles.monthlyCard, { backgroundColor: colors.blue[50] }]}
             >
               <Text style={styles.monthlyLabel}>Active Days</Text>
-              <Text style={styles.monthlyValue}>22</Text>
-              <Text style={styles.monthlyChange}>+5 from last month</Text>
+              <Text style={styles.monthlyValue}>--</Text>
+              <Text style={styles.monthlyNote}>No data yet</Text>
             </View>
             <View
               style={[
@@ -231,8 +231,8 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Avg. Calories</Text>
-              <Text style={styles.monthlyValue}>1,850</Text>
-              <Text style={styles.monthlyNote}>Daily average</Text>
+              <Text style={styles.monthlyValue}>--</Text>
+              <Text style={styles.monthlyNote}>No data yet</Text>
             </View>
             <View
               style={[
@@ -241,8 +241,8 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Active Time</Text>
-              <Text style={styles.monthlyValue}>42 hrs</Text>
-              <Text style={styles.monthlyChange}>+8 hrs from last month</Text>
+              <Text style={styles.monthlyValue}>--</Text>
+              <Text style={styles.monthlyNote}>No data yet</Text>
             </View>
           </View>
         </CardContent>
@@ -257,70 +257,10 @@ export function ProfileScreen() {
           </View>
         </CardHeader>
         <CardContent>
-          <View
-            style={[
-              styles.achievementItem,
-              { backgroundColor: colors.yellow[50] },
-            ]}
-          >
-            <View
-              style={[
-                styles.achievementIcon,
-                { backgroundColor: colors.orange[400] },
-              ]}
-            >
-              <Text style={styles.achievementEmoji}>🔥</Text>
-            </View>
-            <View style={styles.achievementInfo}>
-              <Text style={styles.achievementTitle}>7 Day Streak</Text>
-              <Text style={styles.achievementDesc}>
-                Completed workouts 7 days in a row
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={[
-              styles.achievementItem,
-              { backgroundColor: colors.blue[50] },
-            ]}
-          >
-            <View
-              style={[
-                styles.achievementIcon,
-                { backgroundColor: colors.blue[400] },
-              ]}
-            >
-              <Text style={styles.achievementEmoji}>💪</Text>
-            </View>
-            <View style={styles.achievementInfo}>
-              <Text style={styles.achievementTitle}>First 10K</Text>
-              <Text style={styles.achievementDesc}>
-                Reached 10,000 steps milestone
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={[
-              styles.achievementItem,
-              { backgroundColor: colors.green[50] },
-            ]}
-          >
-            <View
-              style={[
-                styles.achievementIcon,
-                { backgroundColor: colors.green[400] },
-              ]}
-            >
-              <Text style={styles.achievementEmoji}>🎯</Text>
-            </View>
-            <View style={styles.achievementInfo}>
-              <Text style={styles.achievementTitle}>Goal Achiever</Text>
-              <Text style={styles.achievementDesc}>
-                Met weekly calorie goals
-              </Text>
-            </View>
+          <View style={styles.emptyAchievements}>
+            <Ionicons name="trophy-outline" size={48} color={colors.gray[300]} />
+            <Text style={styles.emptyText}>No achievements yet</Text>
+            <Text style={styles.emptySubtext}>Complete goals to earn achievements</Text>
           </View>
         </CardContent>
       </Card>
@@ -587,5 +527,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: colors.red[500],
+  },
+  emptyAchievements: {
+    alignItems: "center",
+    paddingVertical: 24,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.gray[500],
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.gray[400],
+    marginTop: 4,
   },
 });

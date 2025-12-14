@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { storageUtils, Product } from "../utils/storage";
+import { storageUtils, Product, HealthMetrics } from "../utils/storage";
 
 export interface Meal {
   id: string;
@@ -25,6 +25,9 @@ interface FoodContextType {
   proteinGoal: number;
   carbsGoal: number;
   fatsGoal: number;
+  waterGlasses: number;
+  waterGoal: number;
+  healthMetrics: HealthMetrics;
   addMeal: (meal: Omit<Meal, "id">) => Promise<void>;
   removeMeal: (id: string) => void;
   searchProducts: (query: string) => Promise<Product[]>;
@@ -36,6 +39,10 @@ interface FoodContextType {
   getCategoryCalories: (category: string) => number;
   loadProductHistory: () => Promise<void>;
   reloadUserGoals: () => Promise<void>;
+  incrementWater: () => Promise<void>;
+  decrementWater: () => Promise<void>;
+  updateHealthMetrics: (metrics: Partial<HealthMetrics>) => Promise<void>;
+  clearMeals: () => void;
 }
 
 const FoodContext = createContext<FoodContextType | undefined>(undefined);
@@ -45,78 +52,57 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   const [proteinGoal, setProteinGoal] = useState(150);
   const [carbsGoal, setCarbsGoal] = useState(200);
   const [fatsGoal, setFatsGoal] = useState(65);
+  const [waterGlasses, setWaterGlasses] = useState(0);
+  const waterGoal = 8;
+  const [healthMetrics, setHealthMetrics] = useState<HealthMetrics>({
+    steps: 0,
+    stepsGoal: 10000,
+    heartRate: 0,
+    sleepHours: 0,
+    activeMinutes: 0,
+    date: new Date().toISOString().split("T")[0],
+  });
 
-  const [meals, setMeals] = useState<Meal[]>([
-    // Default sample data
-    {
-      id: "1",
-      name: "Oatmeal with Berries",
-      calories: 320,
-      protein: 12,
-      carbs: 54,
-      fats: 6,
-      time: "8:30 AM",
-      category: "breakfast",
-    },
-    {
-      id: "2",
-      name: "Greek Yogurt",
-      calories: 200,
-      protein: 20,
-      carbs: 15,
-      fats: 8,
-      time: "8:45 AM",
-      category: "breakfast",
-    },
-    {
-      id: "3",
-      name: "Grilled Chicken Salad",
-      calories: 450,
-      protein: 42,
-      carbs: 25,
-      fats: 18,
-      time: "1:00 PM",
-      category: "lunch",
-    },
-    {
-      id: "4",
-      name: "Apple",
-      calories: 95,
-      protein: 0,
-      carbs: 25,
-      fats: 0,
-      time: "1:30 PM",
-      category: "lunch",
-    },
-    {
-      id: "5",
-      name: "Protein Shake",
-      calories: 135,
-      protein: 25,
-      carbs: 8,
-      fats: 2,
-      time: "2:00 PM",
-      category: "lunch",
-    },
-    {
-      id: "6",
-      name: "Almonds",
-      calories: 180,
-      protein: 6,
-      carbs: 6,
-      fats: 15,
-      time: "4:00 PM",
-      category: "snack",
-    },
-  ]);
+  const [meals, setMeals] = useState<Meal[]>([]);
 
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Load product history and user goals on mount
+  // Load product history, user goals, water intake, and health metrics on mount
   useEffect(() => {
     loadProductHistory();
     loadUserGoals();
+    loadWaterIntake();
+    loadHealthMetrics();
   }, []);
+
+  const loadWaterIntake = async () => {
+    const waterIntake = await storageUtils.getWaterIntake();
+    setWaterGlasses(waterIntake.glasses);
+  };
+
+  const handleIncrementWater = async () => {
+    const newGlasses = await storageUtils.incrementWater();
+    setWaterGlasses(newGlasses);
+  };
+
+  const handleDecrementWater = async () => {
+    const newGlasses = await storageUtils.decrementWater();
+    setWaterGlasses(newGlasses);
+  };
+
+  const loadHealthMetrics = async () => {
+    const metrics = await storageUtils.getHealthMetrics();
+    setHealthMetrics(metrics);
+  };
+
+  const handleUpdateHealthMetrics = async (metrics: Partial<HealthMetrics>) => {
+    const updated = await storageUtils.saveHealthMetrics(metrics);
+    setHealthMetrics(updated);
+  };
+
+  const clearMeals = () => {
+    setMeals([]);
+  };
 
   const loadUserGoals = async () => {
     const settings = await storageUtils.getUserSettings();
@@ -199,6 +185,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         proteinGoal,
         carbsGoal,
         fatsGoal,
+        waterGlasses,
+        waterGoal,
         addMeal,
         removeMeal,
         searchProducts,
@@ -210,6 +198,11 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         getCategoryCalories,
         loadProductHistory,
         reloadUserGoals: loadUserGoals,
+        incrementWater: handleIncrementWater,
+        decrementWater: handleDecrementWater,
+        updateHealthMetrics: handleUpdateHealthMetrics,
+        clearMeals,
+        healthMetrics,
       }}
     >
       {children}

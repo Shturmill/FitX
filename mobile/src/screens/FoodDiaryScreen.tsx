@@ -43,6 +43,9 @@ export function FoodDiaryScreen() {
     proteinGoal,
     carbsGoal,
     fatsGoal,
+    waterGlasses,
+    incrementWater,
+    decrementWater,
   } = useFoodContext();
 
   const [isAddingMeal, setIsAddingMeal] = useState(false);
@@ -62,16 +65,8 @@ export function FoodDiaryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDropdown, setShowDropdown] = useState(true);
 
-  // Water intake state
-  const [waterGlasses, setWaterGlasses] = useState(0);
-
   // Category-specific suggestions
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
-
-  // Load water intake on mount
-  useEffect(() => {
-    loadWaterIntake();
-  }, []);
 
   // Load category-specific products when modal opens
   useEffect(() => {
@@ -93,24 +88,9 @@ export function FoodDiaryScreen() {
     }
   }, [weight, selectedProduct]);
 
-  const loadWaterIntake = async () => {
-    const waterIntake = await storageUtils.getWaterIntake();
-    setWaterGlasses(waterIntake.glasses);
-  };
-
   const loadCategoryProducts = async () => {
     const products = await storageUtils.getProductsByCategory(selectedCategory);
     setCategoryProducts(products);
-  };
-
-  const handleAddWater = async () => {
-    const newGlasses = await storageUtils.incrementWater();
-    setWaterGlasses(newGlasses);
-  };
-
-  const handleRemoveWater = async () => {
-    const newGlasses = await storageUtils.decrementWater();
-    setWaterGlasses(newGlasses);
   };
 
   const mealSections: MealSection[] = [
@@ -447,9 +427,9 @@ export function FoodDiaryScreen() {
                   ]}
                   onPress={
                     isNext
-                      ? handleAddWater
+                      ? incrementWater
                       : isLast
-                        ? handleRemoveWater
+                        ? decrementWater
                         : undefined
                   }
                   disabled={!isNext && !isLast}

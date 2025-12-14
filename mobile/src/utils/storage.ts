@@ -4,6 +4,8 @@ const PRODUCT_HISTORY_KEY = "@fitx_product_history";
 const WATER_INTAKE_KEY = "@fitx_water_intake";
 const USER_SETTINGS_KEY = "@fitx_user_settings";
 const AUTH_KEY = "@fitx_auth";
+const HEALTH_METRICS_KEY = "@fitx_health_metrics";
+const ACHIEVEMENTS_KEY = "@fitx_achievements";
 
 export interface Product {
   id: string;
@@ -40,6 +42,27 @@ export interface WaterIntake {
 export interface AuthState {
   isLoggedIn: boolean;
   userId?: string;
+}
+
+export interface HealthMetrics {
+  steps: number;
+  stepsGoal: number;
+  heartRate: number;
+  sleepHours: number;
+  activeMinutes: number;
+  date: string; // YYYY-MM-DD
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  progress?: number;
+  total?: number;
+  date?: string;
+  category: "workout" | "nutrition" | "streak" | "milestone";
 }
 
 export const storageUtils = {
@@ -261,6 +284,106 @@ export const storageUtils = {
       await AsyncStorage.multiRemove([AUTH_KEY, USER_SETTINGS_KEY]);
     } catch (error) {
       console.error("Error logging out:", error);
+    }
+  },
+
+  // Health Metrics Functions
+  async getHealthMetrics(): Promise<HealthMetrics> {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const data = await AsyncStorage.getItem(HEALTH_METRICS_KEY);
+      if (data) {
+        const metrics: HealthMetrics = JSON.parse(data);
+        if (metrics.date !== today) {
+          return { steps: 0, stepsGoal: 10000, heartRate: 0, sleepHours: 0, activeMinutes: 0, date: today };
+        }
+        return metrics;
+      }
+      return { steps: 0, stepsGoal: 10000, heartRate: 0, sleepHours: 0, activeMinutes: 0, date: today };
+    } catch (error) {
+      console.error("Error loading health metrics:", error);
+      return { steps: 0, stepsGoal: 10000, heartRate: 0, sleepHours: 0, activeMinutes: 0, date: new Date().toISOString().split("T")[0] };
+    }
+  },
+
+  async saveHealthMetrics(metrics: Partial<HealthMetrics>): Promise<HealthMetrics> {
+    try {
+      const current = await this.getHealthMetrics();
+      const updated: HealthMetrics = {
+        ...current,
+        ...metrics,
+        date: new Date().toISOString().split("T")[0],
+      };
+      await AsyncStorage.setItem(HEALTH_METRICS_KEY, JSON.stringify(updated));
+      return updated;
+    } catch (error) {
+      console.error("Error saving health metrics:", error);
+      throw error;
+    }
+  },
+
+  // Achievements Functions
+  async getAchievements(): Promise<Achievement[]> {
+    try {
+      const data = await AsyncStorage.getItem(ACHIEVEMENTS_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (error) {
+      console.error("Error loading achievements:", error);
+      return [];
+    }
+  },
+
+  async saveAchievements(achievements: Achievement[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(achievements));
+    } catch (error) {
+      console.error("Error saving achievements:", error);
+    }
+  },
+
+  async unlockAchievement(id: string): Promise<Achievement[]> {
+    try {
+      const achievements = await this.getAchievements();
+      const index = achievements.findIndex(a => a.id === id);
+      if (index >= 0) {
+        achievements[index].unlocked = true;
+        achievements[index].date = new Date().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        await this.saveAchievements(achievements);
+      }
+      return achievements;
+    } catch (error) {
+      console.error("Error unlocking achievement:", error);
+      return [];
+    }
+  },
+
+  async updateAchievementProgress(id: string, progress: number): Promise<Achievement[]> {
+    try {
+      const achievements = await this.getAchievements();
+      const index = achievements.findIndex(a => a.id === id);
+      if (index >= 0) {
+        achievements[index].progress = progress;
+        if (achievements[index].total && progress >= achievements[index].total) {
+          achievements[index].unlocked = true;
+          achievements[index].date = new Date().toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+        }
+        await this.saveAchievements(achievements);
+      }
+      return achievements;
+    } catch (error) {
+      console.error("Error updating achievement progress:", error);
+      return [];
     }
   },
 };

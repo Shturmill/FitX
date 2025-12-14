@@ -33,7 +33,7 @@ type DashboardNavigationProp = BottomTabNavigationProp<TabParamList, "Home">;
 
 export function DashboardScreen() {
   const navigation = useNavigation<DashboardNavigationProp>();
-  const { getTotalCalories, calorieGoal } = useFoodContext();
+  const { getTotalCalories, calorieGoal, waterGlasses, waterGoal, healthMetrics } = useFoodContext();
   const { userSettings } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>([
@@ -226,10 +226,10 @@ export function DashboardScreen() {
       <View style={styles.statsGrid}>
         <Card gradient={["#3B82F6", "#06B6D4"]} style={styles.statCard}>
           <Ionicons name="water" size={32} color={colors.white} />
-          <Text style={styles.statValue}>6/8</Text>
+          <Text style={styles.statValue}>{waterGlasses}/{waterGoal}</Text>
           <Text style={styles.statLabel}>Water Glasses</Text>
           <Progress
-            value={75}
+            value={(waterGlasses / waterGoal) * 100}
             height={8}
             backgroundColor="rgba(255,255,255,0.2)"
             fillColor={colors.white}
@@ -239,10 +239,10 @@ export function DashboardScreen() {
 
         <Card gradient={["#22C55E", "#10B981"]} style={styles.statCard}>
           <Ionicons name="footsteps" size={32} color={colors.white} />
-          <Text style={styles.statValue}>8,542</Text>
+          <Text style={styles.statValue}>{healthMetrics.steps.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Steps</Text>
           <Progress
-            value={85}
+            value={(healthMetrics.steps / healthMetrics.stepsGoal) * 100}
             height={8}
             backgroundColor="rgba(255,255,255,0.2)"
             fillColor={colors.white}
@@ -252,10 +252,10 @@ export function DashboardScreen() {
 
         <Card gradient={["#A855F7", "#EC4899"]} style={styles.statCard}>
           <Ionicons name="trending-up" size={32} color={colors.white} />
-          <Text style={styles.statValue}>45 min</Text>
+          <Text style={styles.statValue}>{healthMetrics.activeMinutes} min</Text>
           <Text style={styles.statLabel}>Active Time</Text>
           <Progress
-            value={60}
+            value={(healthMetrics.activeMinutes / 60) * 100}
             height={8}
             backgroundColor="rgba(255,255,255,0.2)"
             fillColor={colors.white}
@@ -278,9 +278,9 @@ export function DashboardScreen() {
               style={[styles.healthCard, { backgroundColor: colors.red[50] }]}
             >
               <Ionicons name="heart" size={28} color={colors.red[500]} />
-              <Text style={styles.healthValue}>72 bpm</Text>
+              <Text style={styles.healthValue}>{healthMetrics.heartRate > 0 ? `${healthMetrics.heartRate} bpm` : '--'}</Text>
               <Text style={styles.healthLabel}>Heart Rate</Text>
-              <Text style={styles.healthStatus}>Normal</Text>
+              <Text style={styles.healthStatus}>{healthMetrics.heartRate > 0 ? (healthMetrics.heartRate < 60 ? 'Low' : healthMetrics.heartRate <= 100 ? 'Normal' : 'High') : 'No data'}</Text>
             </View>
 
             <View
@@ -290,9 +290,9 @@ export function DashboardScreen() {
               ]}
             >
               <Ionicons name="moon" size={28} color={colors.purple[500]} />
-              <Text style={styles.healthValue}>7.5 hrs</Text>
+              <Text style={styles.healthValue}>{healthMetrics.sleepHours > 0 ? `${healthMetrics.sleepHours} hrs` : '--'}</Text>
               <Text style={styles.healthLabel}>Sleep</Text>
-              <Text style={styles.healthStatus}>Good</Text>
+              <Text style={styles.healthStatus}>{healthMetrics.sleepHours > 0 ? (healthMetrics.sleepHours >= 7 ? 'Good' : healthMetrics.sleepHours >= 5 ? 'Fair' : 'Poor') : 'No data'}</Text>
             </View>
           </View>
         </CardContent>
@@ -309,16 +309,20 @@ export function DashboardScreen() {
             <Text style={styles.goalDone}>✓ Done</Text>
           </View>
           <View style={styles.goalItem}>
-            <Text style={styles.goalText}>Drink 8 glasses of water</Text>
-            <Text style={styles.goalProgress}>6/8</Text>
+            <Text style={styles.goalText}>Drink {waterGoal} glasses of water</Text>
+            <Text style={waterGlasses >= waterGoal ? styles.goalDone : styles.goalProgress}>
+              {waterGlasses >= waterGoal ? '✓ Done' : `${waterGlasses}/${waterGoal}`}
+            </Text>
           </View>
           <View style={styles.goalItem}>
             <Text style={styles.goalText}>Log all meals</Text>
             <Text style={styles.goalWarning}>2/3</Text>
           </View>
           <View style={styles.goalItem}>
-            <Text style={styles.goalText}>Reach 10,000 steps</Text>
-            <Text style={styles.goalProgress}>8,542</Text>
+            <Text style={styles.goalText}>Reach {healthMetrics.stepsGoal.toLocaleString()} steps</Text>
+            <Text style={healthMetrics.steps >= healthMetrics.stepsGoal ? styles.goalDone : styles.goalProgress}>
+              {healthMetrics.steps >= healthMetrics.stepsGoal ? '✓ Done' : healthMetrics.steps.toLocaleString()}
+            </Text>
           </View>
         </CardContent>
       </Card>
