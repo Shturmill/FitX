@@ -8,10 +8,10 @@ const AUTH_KEY = "@fitx_auth";
 export interface Product {
   id: string;
   name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
+  calories: number; // per 100g
+  protein: number; // per 100g
+  carbs: number; // per 100g
+  fats: number; // per 100g
   lastUsed: number; // timestamp
   useCount: number; // how many times used
   category?: "breakfast" | "lunch" | "dinner" | "snack"; // last used category
@@ -136,7 +136,7 @@ export const storageUtils = {
     }
   },
 
-  // Get products by category (last 5)
+  // Get products by category (up to 20 for dropdown)
   async getProductsByCategory(
     category: "breakfast" | "lunch" | "dinner" | "snack",
   ): Promise<Product[]> {
@@ -144,8 +144,14 @@ export const storageUtils = {
       const history = await this.getProductHistory();
       return history
         .filter((product) => product.category === category)
-        .sort((a, b) => b.lastUsed - a.lastUsed)
-        .slice(0, 5);
+        .sort((a, b) => {
+          // Sort by use count first, then by recency
+          if (b.useCount !== a.useCount) {
+            return b.useCount - a.useCount;
+          }
+          return b.lastUsed - a.lastUsed;
+        })
+        .slice(0, 20);
     } catch (error) {
       console.error("Error getting products by category:", error);
       return [];

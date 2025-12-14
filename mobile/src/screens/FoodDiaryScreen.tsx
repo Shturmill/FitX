@@ -57,6 +57,11 @@ export function FoodDiaryScreen() {
   const [carbs, setCarbs] = useState("");
   const [fats, setFats] = useState("");
 
+  // Weight and per-100g values state
+  const [weight, setWeight] = useState("100");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showDropdown, setShowDropdown] = useState(true);
+
   // Water intake state
   const [waterGlasses, setWaterGlasses] = useState(0);
 
@@ -72,8 +77,21 @@ export function FoodDiaryScreen() {
   useEffect(() => {
     if (isAddingMeal) {
       loadCategoryProducts();
+      setShowDropdown(true);
     }
   }, [isAddingMeal, selectedCategory]);
+
+  // Recalculate nutritional values when weight changes
+  useEffect(() => {
+    if (selectedProduct) {
+      const weightNum = parseFloat(weight) || 0;
+      const multiplier = weightNum / 100;
+      setCalories(Math.round(selectedProduct.calories * multiplier).toString());
+      setProtein(Math.round(selectedProduct.protein * multiplier).toString());
+      setCarbs(Math.round(selectedProduct.carbs * multiplier).toString());
+      setFats(Math.round(selectedProduct.fats * multiplier).toString());
+    }
+  }, [weight, selectedProduct]);
 
   const loadWaterIntake = async () => {
     const waterIntake = await storageUtils.getWaterIntake();
@@ -131,15 +149,31 @@ export function FoodDiaryScreen() {
   };
 
   const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
     setMealName(product.name);
-    setCalories(product.calories.toString());
-    setProtein(product.protein.toString());
-    setCarbs(product.carbs.toString());
-    setFats(product.fats.toString());
+    setShowDropdown(false);
+    // Initial values are calculated by the useEffect based on weight
+    const weightNum = parseFloat(weight) || 100;
+    const multiplier = weightNum / 100;
+    setCalories(Math.round(product.calories * multiplier).toString());
+    setProtein(Math.round(product.protein * multiplier).toString());
+    setCarbs(Math.round(product.carbs * multiplier).toString());
+    setFats(Math.round(product.fats * multiplier).toString());
   };
 
   const handleSelectCategoryProduct = (product: Product) => {
     handleSelectProduct(product);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedProduct(null);
+    setMealName("");
+    setCalories("");
+    setProtein("");
+    setCarbs("");
+    setFats("");
+    setWeight("100");
+    setShowDropdown(true);
   };
 
   const searchCategoryProducts = async (query: string): Promise<Product[]> => {
@@ -177,6 +211,9 @@ export function FoodDiaryScreen() {
     setProtein("");
     setCarbs("");
     setFats("");
+    setWeight("100");
+    setSelectedProduct(null);
+    setShowDropdown(true);
     setIsAddingMeal(false);
   };
 
@@ -186,6 +223,9 @@ export function FoodDiaryScreen() {
     setProtein("");
     setCarbs("");
     setFats("");
+    setWeight("100");
+    setSelectedProduct(null);
+    setShowDropdown(true);
     setIsAddingMeal(false);
   };
 
@@ -477,58 +517,122 @@ export function FoodDiaryScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Category-specific recent products */}
-              {categoryProducts.length > 0 && !mealName && (
-                <View style={styles.recentProductsContainer}>
-                  <Text style={styles.recentProductsTitle}>
-                    Recent{" "}
+              {/* Product Dropdown - shows immediately when modal opens */}
+              {showDropdown && categoryProducts.length > 0 && (
+                <View style={styles.dropdownContainer}>
+                  <Text style={styles.dropdownTitle}>
+                    Select Product for{" "}
                     {
                       mealSections.find((s) => s.category === selectedCategory)
                         ?.title
                     }
                   </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <Text style={styles.dropdownSubtitle}>
+                    Values shown per 100g
+                  </Text>
+                  <View style={styles.dropdownList}>
                     {categoryProducts.map((product) => (
                       <TouchableOpacity
                         key={product.id}
-                        style={styles.recentProductCard}
+                        style={styles.dropdownItem}
                         onPress={() => handleSelectCategoryProduct(product)}
                       >
-                        <Text
-                          style={styles.recentProductName}
-                          numberOfLines={2}
-                        >
-                          {product.name}
-                        </Text>
-                        <Text style={styles.recentProductCalories}>
-                          {product.calories} cal
-                        </Text>
-                        <View style={styles.recentProductMacros}>
-                          <Text style={styles.recentProductMacro}>
-                            P:{product.protein}g
+                        <View style={styles.dropdownItemLeft}>
+                          <Text style={styles.dropdownItemName}>
+                            {product.name}
                           </Text>
-                          <Text style={styles.recentProductMacro}>
-                            C:{product.carbs}g
+                          <View style={styles.dropdownItemMacros}>
+                            <Text style={styles.dropdownItemMacro}>
+                              P: {product.protein}g
+                            </Text>
+                            <Text style={styles.dropdownItemMacro}>
+                              C: {product.carbs}g
+                            </Text>
+                            <Text style={styles.dropdownItemMacro}>
+                              F: {product.fats}g
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownItemRight}>
+                          <Text style={styles.dropdownItemCalories}>
+                            {product.calories}
                           </Text>
-                          <Text style={styles.recentProductMacro}>
-                            F:{product.fats}g
+                          <Text style={styles.dropdownItemCaloriesLabel}>
+                            cal/100g
                           </Text>
                         </View>
                       </TouchableOpacity>
                     ))}
-                  </ScrollView>
+                  </View>
                 </View>
               )}
 
-              <AutocompleteInput
-                label="Search or Enter Meal Name"
-                placeholder="e.g., Grilled Chicken"
-                value={mealName}
-                onChangeText={setMealName}
-                onSelectProduct={handleSelectProduct}
-                onSearch={searchCategoryProducts}
-                containerStyle={styles.inputContainer}
+              {/* Selected product info with weight input */}
+              {selectedProduct && (
+                <View style={styles.selectedProductContainer}>
+                  <View style={styles.selectedProductHeader}>
+                    <Text style={styles.selectedProductName}>
+                      {selectedProduct.name}
+                    </Text>
+                    <TouchableOpacity onPress={handleClearSelection}>
+                      <Ionicons
+                        name="close-circle"
+                        size={24}
+                        color={colors.gray[400]}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.per100gInfo}>
+                    <Text style={styles.per100gLabel}>Per 100g:</Text>
+                    <Text style={styles.per100gValue}>
+                      {selectedProduct.calories} cal | P: {selectedProduct.protein}g | C: {selectedProduct.carbs}g | F: {selectedProduct.fats}g
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Search/Enter meal name - for new products or searching */}
+              {!selectedProduct && (
+                <AutocompleteInput
+                  label="Or Search / Enter New Product"
+                  placeholder="e.g., Grilled Chicken"
+                  value={mealName}
+                  onChangeText={(text) => {
+                    setMealName(text);
+                    if (text) setShowDropdown(false);
+                    else setShowDropdown(true);
+                  }}
+                  onSelectProduct={handleSelectProduct}
+                  onSearch={searchCategoryProducts}
+                  containerStyle={styles.inputContainer}
+                />
+              )}
+
+              {/* Weight input - always visible when product selected or entering new */}
+              <Input
+                label="Weight (g)"
+                placeholder="100"
+                keyboardType="numeric"
+                value={weight}
+                onChangeText={(text) => {
+                  setWeight(text);
+                  // If no selected product, don't auto-calculate
+                  if (!selectedProduct) return;
+                }}
+                containerStyle={styles.weightInput}
               />
+
+              {/* Calculated nutritional values */}
+              <View style={styles.calculatedSection}>
+                <Text style={styles.calculatedTitle}>
+                  {selectedProduct ? "Calculated Values" : "Nutritional Values"}
+                </Text>
+                {selectedProduct && (
+                  <Text style={styles.calculatedSubtitle}>
+                    Based on {weight || 0}g
+                  </Text>
+                )}
+              </View>
 
               <View style={styles.inputRow}>
                 <Input
@@ -538,6 +642,7 @@ export function FoodDiaryScreen() {
                   value={calories}
                   onChangeText={setCalories}
                   containerStyle={styles.halfInput}
+                  editable={!selectedProduct}
                 />
                 <Input
                   label="Protein (g)"
@@ -546,6 +651,7 @@ export function FoodDiaryScreen() {
                   value={protein}
                   onChangeText={setProtein}
                   containerStyle={styles.halfInput}
+                  editable={!selectedProduct}
                 />
               </View>
 
@@ -557,6 +663,7 @@ export function FoodDiaryScreen() {
                   value={carbs}
                   onChangeText={setCarbs}
                   containerStyle={styles.halfInput}
+                  editable={!selectedProduct}
                 />
                 <Input
                   label="Fats (g)"
@@ -565,6 +672,7 @@ export function FoodDiaryScreen() {
                   value={fats}
                   onChangeText={setFats}
                   containerStyle={styles.halfInput}
+                  editable={!selectedProduct}
                 />
               </View>
 
@@ -949,5 +1057,124 @@ const styles = StyleSheet.create({
   recentProductMacro: {
     fontSize: 11,
     color: colors.gray[600],
+  },
+  // Dropdown styles
+  dropdownContainer: {
+    marginBottom: 20,
+  },
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.gray[800],
+    marginBottom: 4,
+  },
+  dropdownSubtitle: {
+    fontSize: 12,
+    color: colors.gray[500],
+    marginBottom: 12,
+  },
+  dropdownList: {
+    maxHeight: 250,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderRadius: 12,
+    backgroundColor: colors.gray[50],
+    overflow: "hidden",
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+    backgroundColor: colors.white,
+  },
+  dropdownItemLeft: {
+    flex: 1,
+  },
+  dropdownItemName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.gray[900],
+    marginBottom: 4,
+  },
+  dropdownItemMacros: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  dropdownItemMacro: {
+    fontSize: 12,
+    color: colors.gray[500],
+  },
+  dropdownItemRight: {
+    alignItems: "flex-end",
+    marginLeft: 12,
+  },
+  dropdownItemCalories: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.primary[600],
+  },
+  dropdownItemCaloriesLabel: {
+    fontSize: 10,
+    color: colors.gray[500],
+  },
+  // Selected product styles
+  selectedProductContainer: {
+    backgroundColor: colors.primary[50],
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  selectedProductHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  selectedProductName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.gray[900],
+    flex: 1,
+  },
+  per100gInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  per100gLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.gray[600],
+    marginRight: 8,
+  },
+  per100gValue: {
+    fontSize: 12,
+    color: colors.gray[600],
+  },
+  // Weight input style
+  weightInput: {
+    marginBottom: 16,
+  },
+  // Calculated section styles
+  calculatedSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  calculatedTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray[700],
+  },
+  calculatedSubtitle: {
+    fontSize: 12,
+    color: colors.gray[500],
+    fontStyle: "italic",
   },
 });
