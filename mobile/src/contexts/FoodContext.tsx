@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import { storageUtils, Product, HealthMetrics } from "../utils/storage";
+import { healthMetricsAPI } from "../utils/api";
 
 export interface Meal {
   id: string;
@@ -73,6 +74,7 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     loadUserGoals();
     loadWaterIntake();
     loadHealthMetrics();
+    syncHealthMetricsWithAPI();
   }, []);
 
   const loadWaterIntake = async () => {
@@ -98,6 +100,31 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   const handleUpdateHealthMetrics = async (metrics: Partial<HealthMetrics>) => {
     const updated = await storageUtils.saveHealthMetrics(metrics);
     setHealthMetrics(updated);
+    
+    // Try to sync with backend API
+    try {
+      await healthMetricsAPI.updateHealthMetrics(metrics);
+    } catch (error) {
+      console.warn("Failed to sync health metrics with backend:", error);
+      // Continue anyway - local storage is still updated
+    }
+  };
+
+  // Sync health metrics from backend API
+  const syncHealthMetricsWithAPI = async () => {
+    try {
+      const isConnected = await healthMetricsAPI.testConnection();
+      if (isConnected) {
+        const apiMetrics = await healthMetricsAPI.getHealthMetrics();
+        setHealthMetrics(apiMetrics);
+        // Also save to local storage
+        await storageUtils.saveHealthMetrics(apiMetrics);
+        console.log("Synced health metrics from backend API");
+      }
+    } catch (error) {
+      console.warn("Could not sync with backend API:", error);
+      // Continue with local storage
+    }
   };
 
   const clearMeals = () => {
