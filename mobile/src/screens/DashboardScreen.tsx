@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -22,12 +23,8 @@ import {
 import { colors, gradients } from "../theme/colors";
 import { useFoodContext } from "../contexts/FoodContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useAI } from "../contexts/AIContext";
 import { TabParamList } from "../navigation/RootNavigator";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
 
 type DashboardNavigationProp = BottomTabNavigationProp<TabParamList, "Home">;
 
@@ -35,13 +32,8 @@ export function DashboardScreen() {
   const navigation = useNavigation<DashboardNavigationProp>();
   const { getTotalCalories, calorieGoal, waterGlasses, waterGoal, healthMetrics } = useFoodContext();
   const { userSettings } = useAuth();
+  const { messages, isLoading, sendMessage, expandChat } = useAI();
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content: "Hi! I'm your AI fitness coach. How can I help you today?",
-    },
-  ]);
   const [inputValue, setInputValue] = useState("");
 
   // Get calorie data from context
@@ -54,32 +46,18 @@ export function DashboardScreen() {
   const burned = Math.round(totalCalories * 0.15); // Example: 15% burned through activity
   const netCalories = consumed - burned;
 
+  // Show only last 3 messages in the preview
+  const previewMessages = messages.slice(-3);
+
   const handleNavigateToFoodDiary = () => {
     navigation.navigate("Diary");
   };
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage: Message = { role: "user", content: inputValue };
-    setMessages([...messages, userMessage]);
-
-    setTimeout(() => {
-      const responses = [
-        "Great question! Based on your goals, I recommend focusing on consistency.",
-        "That's a smart approach! Let me help you optimize your routine.",
-        "I've analyzed your progress, and you're doing great! Keep it up!",
-        "Here's a personalized tip: Try to increase your protein intake by 20g.",
-      ];
-      const randomResponse =
-        responses[Math.floor(Math.random() * responses.length)];
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: randomResponse },
-      ]);
-    }, 1000);
-
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
+    const message = inputValue;
     setInputValue("");
+    await sendMessage(message);
   };
 
   return (
@@ -110,45 +88,62 @@ export function DashboardScreen() {
       {/* AI Assistant Chat */}
       <Card style={styles.section}>
         <CardHeader>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="sparkles" size={20} color={colors.primary[600]} />
-            <Text style={styles.cardTitle}>AI Fitness Coach</Text>
-          </View>
+          <TouchableOpacity
+            onPress={expandChat}
+            style={styles.cardTitleRowTouchable}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="sparkles" size={20} color={colors.primary[600]} />
+              <Text style={styles.cardTitle}>AI Fitness Coach</Text>
+            </View>
+            <Ionicons name="expand" size={18} color={colors.gray[400]} />
+          </TouchableOpacity>
         </CardHeader>
         <CardContent>
-          <View style={styles.chatContainer}>
-            {messages.map((message, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.messageRow,
-                  message.role === "user"
-                    ? styles.userMessageRow
-                    : styles.assistantMessageRow,
-                ]}
-              >
+          <TouchableOpacity onPress={expandChat} activeOpacity={0.9}>
+            <View style={styles.chatContainer}>
+              {previewMessages.map((message) => (
                 <View
+                  key={message.id}
                   style={[
-                    styles.messageBubble,
+                    styles.messageRow,
                     message.role === "user"
-                      ? styles.userBubble
-                      : styles.assistantBubble,
+                      ? styles.userMessageRow
+                      : styles.assistantMessageRow,
                   ]}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.messageText,
+                      styles.messageBubble,
                       message.role === "user"
-                        ? styles.userText
-                        : styles.assistantText,
+                        ? styles.userBubble
+                        : styles.assistantBubble,
                     ]}
                   >
-                    {message.content}
-                  </Text>
+                    {message.isLoading ? (
+                      <View style={styles.loadingRow}>
+                        <ActivityIndicator size="small" color={colors.primary[600]} />
+                        <Text style={styles.loadingText}>Thinking...</Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.messageText,
+                          message.role === "user"
+                            ? styles.userText
+                            : styles.assistantText,
+                        ]}
+                        numberOfLines={3}
+                      >
+                        {message.content}
+                      </Text>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.inputRow}>
             <TextInput
@@ -158,12 +153,18 @@ export function DashboardScreen() {
               onChangeText={setInputValue}
               onSubmitEditing={handleSendMessage}
               placeholderTextColor={colors.gray[400]}
+              editable={!isLoading}
             />
             <TouchableOpacity
               onPress={handleSendMessage}
-              style={styles.sendButton}
+              style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
+              disabled={isLoading}
             >
-              <Ionicons name="send" size={18} color={colors.white} />
+              {isLoading ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Ionicons name="send" size={18} color={colors.white} />
+              )}
             </TouchableOpacity>
           </View>
         </CardContent>
@@ -364,6 +365,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  cardTitleRowTouchable: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flex: 1,
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: "600",
@@ -425,6 +432,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.gray[400],
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.gray[500],
   },
   calorieHeader: {
     flexDirection: "row",

@@ -147,7 +147,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   const addMeal = async (meal: Omit<Meal, "id" | "date">) => {
     // Save meal to storage and get the saved meal with id and date
     const newMeal = await storageUtils.addMeal(meal);
-    setMeals((prev) => [...prev, newMeal]);
+    const updatedMeals = [...meals, newMeal];
+    setMeals(updatedMeals);
 
     // Save product to history with category
     await storageUtils.saveProduct({
@@ -161,6 +162,10 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
     // Reload product history
     await loadProductHistory();
+
+    // Check calorie goal achievement
+    const totalCaloriesAfterMeal = updatedMeals.reduce((sum, m) => sum + m.calories, 0);
+    await storageUtils.checkCalorieGoalAchievement(totalCaloriesAfterMeal, calorieGoal);
   };
 
   const removeMeal = async (id: string) => {

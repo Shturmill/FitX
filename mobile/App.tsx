@@ -7,7 +7,9 @@ import { RootNavigator } from "./src/navigation/RootNavigator";
 import { FoodProvider } from "./src/contexts/FoodContext";
 import { TrainingProvider } from "./src/contexts/TrainingContext";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
+import { AIProvider } from "./src/contexts/AIContext";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { FullScreenChat } from "./src/components/FullScreenChat";
 import { colors } from "./src/theme/colors";
 
 function AppContent() {
@@ -39,7 +41,10 @@ export default function App() {
       <AuthProvider>
         <FoodProvider>
           <TrainingProvider>
-            <AppContent />
+            <AIProvider>
+              <AppContent />
+              <FullScreenChat />
+            </AIProvider>
           </TrainingProvider>
         </FoodProvider>
       </AuthProvider>

@@ -813,10 +813,6 @@ export function FoodDiaryScreen() {
                 )}
               </View>
 
-              <Text style={styles.decimalHint}>
-                Supports decimal values (e.g., 3.25, 0.75)
-              </Text>
-
               <View style={styles.inputRow}>
                 <View style={styles.halfInputContainer}>
                   <Text style={styles.inputLabel}>Calories *</Text>

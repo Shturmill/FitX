@@ -335,17 +335,56 @@ export const storageUtils = {
     }
   },
 
+  // Default achievements definition
+  getDefaultAchievements(): Achievement[] {
+    return [
+      {
+        id: "first_calorie_goal",
+        title: "First Calorie Goal",
+        description: "Reach your daily calorie goal for the first time",
+        icon: "🎯",
+        unlocked: false,
+        category: "nutrition",
+      },
+      {
+        id: "calorie_champion",
+        title: "Calorie Champion",
+        description: "Reach your daily calorie goal 10 times",
+        icon: "🏆",
+        unlocked: false,
+        progress: 0,
+        total: 10,
+        category: "nutrition",
+      },
+    ];
+  },
+
   // Achievements Functions
   async getAchievements(): Promise<Achievement[]> {
     try {
       const data = await AsyncStorage.getItem(ACHIEVEMENTS_KEY);
       if (data) {
-        return JSON.parse(data);
+        const stored: Achievement[] = JSON.parse(data);
+        // Merge with default achievements (in case new ones were added)
+        const defaults = this.getDefaultAchievements();
+        const mergedAchievements: Achievement[] = [];
+
+        for (const defaultAch of defaults) {
+          const existing = stored.find(a => a.id === defaultAch.id);
+          if (existing) {
+            mergedAchievements.push(existing);
+          } else {
+            mergedAchievements.push(defaultAch);
+          }
+        }
+
+        return mergedAchievements;
       }
-      return [];
+      // Return default achievements if none stored
+      return this.getDefaultAchievements();
     } catch (error) {
       console.error("Error loading achievements:", error);
-      return [];
+      return this.getDefaultAchievements();
     }
   },
 
@@ -397,6 +436,72 @@ export const storageUtils = {
     } catch (error) {
       console.error("Error updating achievement progress:", error);
       return [];
+    }
+  },
+
+  // Check and update calorie goal achievements
+  async checkCalorieGoalAchievement(currentCalories: number, calorieGoal: number): Promise<{ unlocked: Achievement | null; updated: Achievement | null }> {
+    const result: { unlocked: Achievement | null; updated: Achievement | null } = { unlocked: null, updated: null };
+
+    // Only check if user reached or exceeded their calorie goal
+    if (currentCalories < calorieGoal) {
+      return result;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const CALORIE_DAYS_KEY = "@fitx_calorie_goal_days";
+
+    try {
+      // Get the days when calorie goal was reached
+      const daysData = await AsyncStorage.getItem(CALORIE_DAYS_KEY);
+      const daysReached: string[] = daysData ? JSON.parse(daysData) : [];
+
+      // Check if today was already counted
+      if (daysReached.includes(today)) {
+        return result;
+      }
+
+      // Add today to the list
+      daysReached.push(today);
+      await AsyncStorage.setItem(CALORIE_DAYS_KEY, JSON.stringify(daysReached));
+
+      const achievements = await this.getAchievements();
+      const totalDaysReached = daysReached.length;
+
+      // Check "First Calorie Goal" achievement
+      const firstGoalIndex = achievements.findIndex(a => a.id === "first_calorie_goal");
+      if (firstGoalIndex >= 0 && !achievements[firstGoalIndex].unlocked) {
+        achievements[firstGoalIndex].unlocked = true;
+        achievements[firstGoalIndex].date = new Date().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        result.unlocked = achievements[firstGoalIndex];
+      }
+
+      // Update "Calorie Champion" progress
+      const championIndex = achievements.findIndex(a => a.id === "calorie_champion");
+      if (championIndex >= 0) {
+        achievements[championIndex].progress = totalDaysReached;
+        if (achievements[championIndex].total && totalDaysReached >= achievements[championIndex].total && !achievements[championIndex].unlocked) {
+          achievements[championIndex].unlocked = true;
+          achievements[championIndex].date = new Date().toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          result.unlocked = achievements[championIndex];
+        } else {
+          result.updated = achievements[championIndex];
+        }
+      }
+
+      await this.saveAchievements(achievements);
+      return result;
+    } catch (error) {
+      console.error("Error checking calorie goal achievement:", error);
+      return result;
     }
   },
 

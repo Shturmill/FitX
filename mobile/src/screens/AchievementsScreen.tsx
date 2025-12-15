@@ -99,7 +99,7 @@ export function AchievementsScreen() {
           <Ionicons name="trophy" size={64} color="rgba(255,255,255,0.8)" />
         </View>
         <Progress
-          value={(unlockedAchievements.length / achievements.length) * 100}
+          value={achievements.length > 0 ? (unlockedAchievements.length / achievements.length) * 100 : 0}
           height={8}
           backgroundColor="rgba(255,255,255,0.2)"
           fillColor={colors.white}
@@ -241,24 +241,42 @@ export function AchievementsScreen() {
         </Card>
       ))}
 
-      {/* Motivation Card */}
-      <Card style={[styles.motivationCard, styles.lastSection]}>
-        <View style={styles.motivationHeader}>
-          <Ionicons name="flash" size={24} color={colors.orange[500]} />
-          <Text style={styles.motivationTitle}>Keep Going!</Text>
-        </View>
-        <Text style={styles.motivationText}>
-          You're making great progress! Complete 2 more strength training
-          sessions to unlock the "Iron Will" achievement.
-        </Text>
-        <View style={styles.nextAchievement}>
-          <View style={styles.nextHeader}>
-            <Text style={styles.nextLabel}>Next Achievement</Text>
-            <Text style={styles.nextPercent}>80% Complete</Text>
-          </View>
-          <Progress value={80} height={8} />
-        </View>
-      </Card>
+      {/* Next Achievement Card - Only show if there are locked achievements with progress */}
+      {(() => {
+        const nextAchievement = lockedAchievements.find(
+          (a) => a.progress !== undefined && a.total !== undefined && a.progress > 0
+        );
+        if (!nextAchievement) return null;
+
+        const progressPercent = Math.round(
+          ((nextAchievement.progress || 0) / (nextAchievement.total || 1)) * 100
+        );
+        const remaining = (nextAchievement.total || 0) - (nextAchievement.progress || 0);
+
+        return (
+          <Card style={[styles.motivationCard, styles.lastSection]}>
+            <View style={styles.motivationHeader}>
+              <Text style={styles.motivationEmoji}>{nextAchievement.icon}</Text>
+              <Text style={styles.motivationTitle}>Almost There!</Text>
+            </View>
+            <Text style={styles.motivationText}>
+              {remaining} more to unlock "{nextAchievement.title}"
+            </Text>
+            <View style={styles.nextAchievement}>
+              <View style={styles.nextHeader}>
+                <Text style={styles.nextLabel}>{nextAchievement.title}</Text>
+                <Text style={styles.nextPercent}>{progressPercent}%</Text>
+              </View>
+              <Progress value={progressPercent} height={8} />
+            </View>
+          </Card>
+        );
+      })()}
+
+      {/* Spacer if no motivation card */}
+      {!lockedAchievements.find(
+        (a) => a.progress !== undefined && a.total !== undefined && a.progress > 0
+      ) && <View style={styles.lastSection} />}
     </ScrollView>
   );
 }
@@ -448,6 +466,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginBottom: 8,
+  },
+  motivationEmoji: {
+    fontSize: 24,
   },
   motivationTitle: {
     fontSize: 16,
