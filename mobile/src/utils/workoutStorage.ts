@@ -358,4 +358,39 @@ export const workoutStorage = {
       await this.addRecentExercise(exercise);
     }
   },
+
+  // Monthly Statistics
+  getMonthlyStats(history: CompletedWorkout[]): {
+    workoutCount: number;
+    activeDays: number;
+    totalActiveMinutes: number;
+  } {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Filter workouts from current month
+    const monthlyWorkouts = history.filter((workout) => {
+      const workoutDate = new Date(workout.date);
+      return (
+        workoutDate.getMonth() === currentMonth &&
+        workoutDate.getFullYear() === currentYear
+      );
+    });
+
+    // Count unique active days
+    const uniqueDays = new Set(monthlyWorkouts.map((w) => w.date));
+
+    // Sum total active minutes
+    const totalActiveMinutes = monthlyWorkouts.reduce(
+      (sum, workout) => sum + workout.duration,
+      0
+    );
+
+    return {
+      workoutCount: monthlyWorkouts.length,
+      activeDays: uniqueDays.size,
+      totalActiveMinutes,
+    };
+  },
 };

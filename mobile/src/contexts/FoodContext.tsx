@@ -5,19 +5,10 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { storageUtils, Product, HealthMetrics } from "../utils/storage";
+import { storageUtils, Product, HealthMetrics, Meal } from "../utils/storage";
 import { healthMetricsAPI } from "../utils/api";
 
-export interface Meal {
-  id: string;
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  time: string;
-  category: "breakfast" | "lunch" | "dinner" | "snack";
-}
+export type { Meal } from "../utils/storage";
 
 interface FoodContextType {
   meals: Meal[];
@@ -29,8 +20,8 @@ interface FoodContextType {
   waterGlasses: number;
   waterGoal: number;
   healthMetrics: HealthMetrics;
-  addMeal: (meal: Omit<Meal, "id">) => Promise<void>;
-  removeMeal: (id: string) => void;
+  addMeal: (meal: Omit<Meal, "id" | "date">) => Promise<void>;
+  removeMeal: (id: string) => Promise<void>;
   searchProducts: (query: string) => Promise<Product[]>;
   getTotalCalories: () => number;
   getTotalProtein: () => number;
@@ -43,7 +34,7 @@ interface FoodContextType {
   incrementWater: () => Promise<void>;
   decrementWater: () => Promise<void>;
   updateHealthMetrics: (metrics: Partial<HealthMetrics>) => Promise<void>;
-  clearMeals: () => void;
+  clearMeals: () => Promise<void>;
 }
 
 const FoodContext = createContext<FoodContextType | undefined>(undefined);
@@ -68,14 +59,20 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Load product history, user goals, water intake, and health metrics on mount
+  // Load product history, user goals, water intake, meals, and health metrics on mount
   useEffect(() => {
     loadProductHistory();
     loadUserGoals();
     loadWaterIntake();
+    loadMeals();
     loadHealthMetrics();
     syncHealthMetricsWithAPI();
   }, []);
+
+  const loadMeals = async () => {
+    const savedMeals = await storageUtils.getMeals();
+    setMeals(savedMeals);
+  };
 
   const loadWaterIntake = async () => {
     const waterIntake = await storageUtils.getWaterIntake();
@@ -127,7 +124,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const clearMeals = () => {
+  const clearMeals = async () => {
+    await storageUtils.clearTodayMeals();
     setMeals([]);
   };
 
@@ -146,12 +144,9 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     setProducts(history);
   };
 
-  const addMeal = async (meal: Omit<Meal, "id">) => {
-    const newMeal: Meal = {
-      ...meal,
-      id: Date.now().toString(),
-    };
-
+  const addMeal = async (meal: Omit<Meal, "id" | "date">) => {
+    // Save meal to storage and get the saved meal with id and date
+    const newMeal = await storageUtils.addMeal(meal);
     setMeals((prev) => [...prev, newMeal]);
 
     // Save product to history with category
@@ -168,7 +163,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     await loadProductHistory();
   };
 
-  const removeMeal = (id: string) => {
+  const removeMeal = async (id: string) => {
+    await storageUtils.removeMeal(id);
     setMeals((prev) => prev.filter((meal) => meal.id !== id));
   };
 

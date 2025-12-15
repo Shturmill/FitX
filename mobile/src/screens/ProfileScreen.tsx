@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -19,13 +19,28 @@ import {
 import { colors, gradients } from "../theme/colors";
 import { useAuth } from "../contexts/AuthContext";
 import { useFoodContext } from "../contexts/FoodContext";
+import { useTraining } from "../contexts/TrainingContext";
 import { EditProfileModal } from "../components/EditProfileModal";
 import { UserSettings } from "../utils/storage";
+import { workoutStorage } from "../utils/workoutStorage";
 
 export function ProfileScreen() {
   const { userSettings, logout, updateSettings } = useAuth();
-  const { reloadUserGoals } = useFoodContext();
+  const { reloadUserGoals, meals, healthMetrics } = useFoodContext();
+  const { history } = useTraining();
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+
+  // Calculate monthly workout statistics
+  const monthlyStats = useMemo(() => {
+    return workoutStorage.getMonthlyStats(history);
+  }, [history]);
+
+  // Calculate average daily calories from meals
+  const averageCalories = useMemo(() => {
+    if (meals.length === 0) return 0;
+    const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
+    return Math.round(totalCalories);
+  }, [meals]);
 
   const handleEditProfile = () => {
     setIsEditModalVisible(true);
@@ -214,15 +229,23 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Workouts</Text>
-              <Text style={styles.monthlyValue}>--</Text>
-              <Text style={styles.monthlyNote}>No data yet</Text>
+              <Text style={styles.monthlyValue}>
+                {monthlyStats.workoutCount > 0 ? monthlyStats.workoutCount : "--"}
+              </Text>
+              <Text style={styles.monthlyNote}>
+                {monthlyStats.workoutCount > 0 ? "This month" : "No data yet"}
+              </Text>
             </View>
             <View
               style={[styles.monthlyCard, { backgroundColor: colors.blue[50] }]}
             >
               <Text style={styles.monthlyLabel}>Active Days</Text>
-              <Text style={styles.monthlyValue}>--</Text>
-              <Text style={styles.monthlyNote}>No data yet</Text>
+              <Text style={styles.monthlyValue}>
+                {monthlyStats.activeDays > 0 ? monthlyStats.activeDays : "--"}
+              </Text>
+              <Text style={styles.monthlyNote}>
+                {monthlyStats.activeDays > 0 ? "This month" : "No data yet"}
+              </Text>
             </View>
             <View
               style={[
@@ -231,8 +254,12 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Avg. Calories</Text>
-              <Text style={styles.monthlyValue}>--</Text>
-              <Text style={styles.monthlyNote}>No data yet</Text>
+              <Text style={styles.monthlyValue}>
+                {averageCalories > 0 ? averageCalories : "--"}
+              </Text>
+              <Text style={styles.monthlyNote}>
+                {averageCalories > 0 ? "Today" : "No data yet"}
+              </Text>
             </View>
             <View
               style={[
@@ -241,8 +268,18 @@ export function ProfileScreen() {
               ]}
             >
               <Text style={styles.monthlyLabel}>Active Time</Text>
-              <Text style={styles.monthlyValue}>--</Text>
-              <Text style={styles.monthlyNote}>No data yet</Text>
+              <Text style={styles.monthlyValue}>
+                {monthlyStats.totalActiveMinutes > 0
+                  ? `${monthlyStats.totalActiveMinutes}m`
+                  : healthMetrics.activeMinutes > 0
+                  ? `${healthMetrics.activeMinutes}m`
+                  : "--"}
+              </Text>
+              <Text style={styles.monthlyNote}>
+                {monthlyStats.totalActiveMinutes > 0 || healthMetrics.activeMinutes > 0
+                  ? "This month"
+                  : "No data yet"}
+              </Text>
             </View>
           </View>
         </CardContent>

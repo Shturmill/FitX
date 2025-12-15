@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -26,6 +27,33 @@ interface MealSection {
   icon: keyof typeof Ionicons.glyphMap;
   category: "breakfast" | "lunch" | "dinner" | "snack";
 }
+
+interface FieldErrors {
+  mealName: boolean;
+  weight: boolean;
+  calories: boolean;
+  protein: boolean;
+  carbs: boolean;
+  fats: boolean;
+}
+
+// Validate decimal number with max 2 decimal places
+const validateDecimal = (value: string): boolean => {
+  if (!value.trim()) return true; // Empty is valid (will be caught by required check)
+  const regex = /^-?\d*\.?\d{0,2}$/;
+  return regex.test(value) && !isNaN(parseFloat(value));
+};
+
+// Format number to max 2 decimal places
+const formatDecimal = (num: number): string => {
+  return Math.round(num * 100) / 100 + "";
+};
+
+// Parse decimal input safely
+const parseDecimalInput = (value: string): number => {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? 0 : Math.round(parsed * 100) / 100;
+};
 
 export function FoodDiaryScreen() {
   const {
@@ -65,6 +93,24 @@ export function FoodDiaryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDropdown, setShowDropdown] = useState(true);
 
+  // Per 100g base values (for recalculation when weight changes)
+  const [basePer100g, setBasePer100g] = useState<{
+    calories: number;
+    protein: number;
+    carbs: number;
+    fats: number;
+  } | null>(null);
+
+  // Error states
+  const [errors, setErrors] = useState<FieldErrors>({
+    mealName: false,
+    weight: false,
+    calories: false,
+    protein: false,
+    carbs: false,
+    fats: false,
+  });
+
   // Category-specific suggestions
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
 
@@ -76,17 +122,17 @@ export function FoodDiaryScreen() {
     }
   }, [isAddingMeal, selectedCategory]);
 
-  // Recalculate nutritional values when weight changes
+  // Recalculate nutritional values when weight changes (only if basePer100g is set)
   useEffect(() => {
-    if (selectedProduct) {
-      const weightNum = parseFloat(weight) || 0;
+    if (basePer100g && validateDecimal(weight)) {
+      const weightNum = parseDecimalInput(weight);
       const multiplier = weightNum / 100;
-      setCalories(Math.round(selectedProduct.calories * multiplier).toString());
-      setProtein(Math.round(selectedProduct.protein * multiplier).toString());
-      setCarbs(Math.round(selectedProduct.carbs * multiplier).toString());
-      setFats(Math.round(selectedProduct.fats * multiplier).toString());
+      setCalories(formatDecimal(basePer100g.calories * multiplier));
+      setProtein(formatDecimal(basePer100g.protein * multiplier));
+      setCarbs(formatDecimal(basePer100g.carbs * multiplier));
+      setFats(formatDecimal(basePer100g.fats * multiplier));
     }
-  }, [weight, selectedProduct]);
+  }, [weight, basePer100g]);
 
   const loadCategoryProducts = async () => {
     const products = await storageUtils.getProductsByCategory(selectedCategory);
@@ -126,19 +172,47 @@ export function FoodDiaryScreen() {
   ) => {
     setSelectedCategory(category);
     setIsAddingMeal(true);
+    // Reset errors
+    setErrors({
+      mealName: false,
+      weight: false,
+      calories: false,
+      protein: false,
+      carbs: false,
+      fats: false,
+    });
   };
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
     setMealName(product.name);
     setShowDropdown(false);
-    // Initial values are calculated by the useEffect based on weight
-    const weightNum = parseFloat(weight) || 100;
+
+    // Set base per 100g values for recalculation
+    setBasePer100g({
+      calories: product.calories,
+      protein: product.protein,
+      carbs: product.carbs,
+      fats: product.fats,
+    });
+
+    // Calculate initial values based on weight
+    const weightNum = parseDecimalInput(weight) || 100;
     const multiplier = weightNum / 100;
-    setCalories(Math.round(product.calories * multiplier).toString());
-    setProtein(Math.round(product.protein * multiplier).toString());
-    setCarbs(Math.round(product.carbs * multiplier).toString());
-    setFats(Math.round(product.fats * multiplier).toString());
+    setCalories(formatDecimal(product.calories * multiplier));
+    setProtein(formatDecimal(product.protein * multiplier));
+    setCarbs(formatDecimal(product.carbs * multiplier));
+    setFats(formatDecimal(product.fats * multiplier));
+
+    // Clear errors
+    setErrors({
+      mealName: false,
+      weight: false,
+      calories: false,
+      protein: false,
+      carbs: false,
+      fats: false,
+    });
   };
 
   const handleSelectCategoryProduct = (product: Product) => {
@@ -147,6 +221,7 @@ export function FoodDiaryScreen() {
 
   const handleClearSelection = () => {
     setSelectedProduct(null);
+    setBasePer100g(null);
     setMealName("");
     setCalories("");
     setProtein("");
@@ -154,18 +229,102 @@ export function FoodDiaryScreen() {
     setFats("");
     setWeight("100");
     setShowDropdown(true);
+    setErrors({
+      mealName: false,
+      weight: false,
+      calories: false,
+      protein: false,
+      carbs: false,
+      fats: false,
+    });
   };
 
   const searchCategoryProducts = async (query: string): Promise<Product[]> => {
     if (!query.trim()) return [];
     const allProducts = await searchProducts(query);
-    // Filter by category or return all
     return allProducts;
   };
 
-  const handleAddMeal = async () => {
-    if (!mealName.trim() || !calories.trim()) {
+  // Handle decimal input with validation
+  const handleDecimalInput = (
+    value: string,
+    setter: (val: string) => void,
+    field: keyof FieldErrors
+  ) => {
+    // Allow empty string, digits, and one decimal point
+    const cleanValue = value.replace(/[^0-9.]/g, "");
+
+    // Ensure only one decimal point
+    const parts = cleanValue.split(".");
+    let finalValue = cleanValue;
+    if (parts.length > 2) {
+      finalValue = parts[0] + "." + parts.slice(1).join("");
+    }
+
+    // Limit to 2 decimal places
+    if (parts.length === 2 && parts[1].length > 2) {
+      finalValue = parts[0] + "." + parts[1].substring(0, 2);
+    }
+
+    setter(finalValue);
+
+    // Clear error if valid
+    if (validateDecimal(finalValue) || finalValue === "") {
+      setErrors(prev => ({ ...prev, [field]: false }));
+    }
+  };
+
+  // Handle nutritional value change (manual edit clears basePer100g to prevent auto-recalculation)
+  const handleNutritionalChange = (
+    value: string,
+    setter: (val: string) => void,
+    field: keyof FieldErrors
+  ) => {
+    handleDecimalInput(value, setter, field);
+    // When user manually edits nutritional values, stop auto-recalculation
+    if (basePer100g) {
+      setBasePer100g(null);
+    }
+  };
+
+  // Recalculate based on new per-100g values
+  const handleRecalculateFromPer100g = () => {
+    if (!validateDecimal(calories) || !validateDecimal(protein) ||
+        !validateDecimal(carbs) || !validateDecimal(fats) || !validateDecimal(weight)) {
       return;
+    }
+
+    const weightNum = parseDecimalInput(weight);
+    if (weightNum <= 0) return;
+
+    // Calculate per-100g values from current values and weight
+    const multiplier = 100 / weightNum;
+    const newBase = {
+      calories: parseDecimalInput(calories) * multiplier,
+      protein: parseDecimalInput(protein) * multiplier,
+      carbs: parseDecimalInput(carbs) * multiplier,
+      fats: parseDecimalInput(fats) * multiplier,
+    };
+    setBasePer100g(newBase);
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: FieldErrors = {
+      mealName: !mealName.trim(),
+      weight: !validateDecimal(weight) || parseDecimalInput(weight) <= 0,
+      calories: !validateDecimal(calories) || calories.trim() === "",
+      protein: !validateDecimal(protein),
+      carbs: !validateDecimal(carbs),
+      fats: !validateDecimal(fats),
+    };
+
+    setErrors(newErrors);
+    return !Object.values(newErrors).some(Boolean);
+  };
+
+  const handleAddMeal = async () => {
+    if (!validateForm()) {
+      return; // Don't close modal if validation fails
     }
 
     const now = new Date();
@@ -177,10 +336,10 @@ export function FoodDiaryScreen() {
 
     await addMeal({
       name: mealName,
-      calories: parseInt(calories) || 0,
-      protein: parseInt(protein) || 0,
-      carbs: parseInt(carbs) || 0,
-      fats: parseInt(fats) || 0,
+      calories: parseDecimalInput(calories),
+      protein: parseDecimalInput(protein),
+      carbs: parseDecimalInput(carbs),
+      fats: parseDecimalInput(fats),
       time: timeString,
       category: selectedCategory,
     });
@@ -193,8 +352,17 @@ export function FoodDiaryScreen() {
     setFats("");
     setWeight("100");
     setSelectedProduct(null);
+    setBasePer100g(null);
     setShowDropdown(true);
     setIsAddingMeal(false);
+    setErrors({
+      mealName: false,
+      weight: false,
+      calories: false,
+      protein: false,
+      carbs: false,
+      fats: false,
+    });
   };
 
   const handleCancelAddMeal = () => {
@@ -205,8 +373,17 @@ export function FoodDiaryScreen() {
     setFats("");
     setWeight("100");
     setSelectedProduct(null);
+    setBasePer100g(null);
     setShowDropdown(true);
     setIsAddingMeal(false);
+    setErrors({
+      mealName: false,
+      weight: false,
+      calories: false,
+      protein: false,
+      carbs: false,
+      fats: false,
+    });
   };
 
   return (
@@ -238,7 +415,7 @@ export function FoodDiaryScreen() {
           <View>
             <Text style={styles.summaryLabel}>Calories Today</Text>
             <View style={styles.summaryValues}>
-              <Text style={styles.summaryMain}>{totalCalories}</Text>
+              <Text style={styles.summaryMain}>{Math.round(totalCalories)}</Text>
               <Text style={styles.summaryGoal}>/ {calorieGoal}</Text>
             </View>
           </View>
@@ -251,7 +428,7 @@ export function FoodDiaryScreen() {
           fillColor={colors.white}
         />
         <Text style={styles.remainingText}>
-          {calorieGoal - totalCalories} calories remaining
+          {Math.round(calorieGoal - totalCalories)} calories remaining
         </Text>
       </Card>
 
@@ -269,7 +446,7 @@ export function FoodDiaryScreen() {
                   { backgroundColor: colors.blue[500] },
                 ]}
               >
-                <Text style={styles.macroValue}>{totalProtein}g</Text>
+                <Text style={styles.macroValue}>{Math.round(totalProtein)}g</Text>
               </View>
               <Text style={styles.macroLabel}>Protein</Text>
               <Progress
@@ -286,7 +463,7 @@ export function FoodDiaryScreen() {
                   { backgroundColor: colors.orange[500] },
                 ]}
               >
-                <Text style={styles.macroValue}>{totalCarbs}g</Text>
+                <Text style={styles.macroValue}>{Math.round(totalCarbs)}g</Text>
               </View>
               <Text style={styles.macroLabel}>Carbs</Text>
               <Progress
@@ -303,7 +480,7 @@ export function FoodDiaryScreen() {
                   { backgroundColor: colors.purple[500] },
                 ]}
               >
-                <Text style={styles.macroValue}>{totalFats}g</Text>
+                <Text style={styles.macroValue}>{Math.round(totalFats)}g</Text>
               </View>
               <Text style={styles.macroLabel}>Fats</Text>
               <Progress
@@ -333,7 +510,7 @@ export function FoodDiaryScreen() {
                   />
                   <Text style={styles.cardTitle}>{section.title}</Text>
                 </View>
-                <Text style={styles.mealCalories}>{categoryCalories} cal</Text>
+                <Text style={styles.mealCalories}>{Math.round(categoryCalories)} cal</Text>
               </View>
             </CardHeader>
             <CardContent>
@@ -573,87 +750,133 @@ export function FoodDiaryScreen() {
 
               {/* Search/Enter meal name - for new products or searching */}
               {!selectedProduct && (
-                <AutocompleteInput
-                  label="Or Search / Enter New Product"
-                  placeholder="e.g., Grilled Chicken"
-                  value={mealName}
-                  onChangeText={(text) => {
-                    setMealName(text);
-                    if (text) setShowDropdown(false);
-                    else setShowDropdown(true);
-                  }}
-                  onSelectProduct={handleSelectProduct}
-                  onSearch={searchCategoryProducts}
-                  containerStyle={styles.inputContainer}
-                />
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Or Search / Enter New Product</Text>
+                  <TextInput
+                    style={[styles.textInput, errors.mealName && styles.inputError]}
+                    placeholder="e.g., Grilled Chicken"
+                    placeholderTextColor={colors.gray[400]}
+                    value={mealName}
+                    onChangeText={(text) => {
+                      setMealName(text);
+                      if (text) setShowDropdown(false);
+                      else setShowDropdown(true);
+                      if (text.trim()) {
+                        setErrors(prev => ({ ...prev, mealName: false }));
+                      }
+                    }}
+                  />
+                  {errors.mealName && (
+                    <Text style={styles.errorText}>Product name is required</Text>
+                  )}
+                </View>
               )}
 
-              {/* Weight input - always visible when product selected or entering new */}
-              <Input
-                label="Weight (g)"
-                placeholder="100"
-                keyboardType="numeric"
-                value={weight}
-                onChangeText={(text) => {
-                  setWeight(text);
-                  // If no selected product, don't auto-calculate
-                  if (!selectedProduct) return;
-                }}
-                containerStyle={styles.weightInput}
-              />
+              {/* Weight input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Weight (g)</Text>
+                <TextInput
+                  style={[styles.textInput, errors.weight && styles.inputError]}
+                  placeholder="100"
+                  placeholderTextColor={colors.gray[400]}
+                  keyboardType="decimal-pad"
+                  value={weight}
+                  onChangeText={(text) => handleDecimalInput(text, setWeight, "weight")}
+                />
+                {errors.weight && (
+                  <Text style={styles.errorText}>Enter a valid weight (e.g., 150.5)</Text>
+                )}
+              </View>
+
+              {/* Recalculate button */}
+              {!basePer100g && (calories || protein || carbs || fats) && (
+                <TouchableOpacity
+                  style={styles.recalculateButton}
+                  onPress={handleRecalculateFromPer100g}
+                >
+                  <Ionicons name="calculator-outline" size={18} color={colors.primary[600]} />
+                  <Text style={styles.recalculateText}>
+                    Enable auto-recalculation based on current values
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Calculated nutritional values */}
               <View style={styles.calculatedSection}>
                 <Text style={styles.calculatedTitle}>
-                  {selectedProduct ? "Calculated Values" : "Nutritional Values"}
+                  Nutritional Values
                 </Text>
-                {selectedProduct && (
+                {basePer100g && (
                   <Text style={styles.calculatedSubtitle}>
-                    Based on {weight || 0}g
+                    Auto-calculating for {weight || 0}g
                   </Text>
                 )}
               </View>
 
+              <Text style={styles.decimalHint}>
+                Supports decimal values (e.g., 3.25, 0.75)
+              </Text>
+
               <View style={styles.inputRow}>
-                <Input
-                  label="Calories"
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={calories}
-                  onChangeText={setCalories}
-                  containerStyle={styles.halfInput}
-                  editable={!selectedProduct}
-                />
-                <Input
-                  label="Protein (g)"
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={protein}
-                  onChangeText={setProtein}
-                  containerStyle={styles.halfInput}
-                  editable={!selectedProduct}
-                />
+                <View style={styles.halfInputContainer}>
+                  <Text style={styles.inputLabel}>Calories *</Text>
+                  <TextInput
+                    style={[styles.textInput, errors.calories && styles.inputError]}
+                    placeholder="0"
+                    placeholderTextColor={colors.gray[400]}
+                    keyboardType="decimal-pad"
+                    value={calories}
+                    onChangeText={(text) => handleNutritionalChange(text, setCalories, "calories")}
+                  />
+                  {errors.calories && (
+                    <Text style={styles.errorText}>Required</Text>
+                  )}
+                </View>
+                <View style={styles.halfInputContainer}>
+                  <Text style={styles.inputLabel}>Protein (g)</Text>
+                  <TextInput
+                    style={[styles.textInput, errors.protein && styles.inputError]}
+                    placeholder="0"
+                    placeholderTextColor={colors.gray[400]}
+                    keyboardType="decimal-pad"
+                    value={protein}
+                    onChangeText={(text) => handleNutritionalChange(text, setProtein, "protein")}
+                  />
+                  {errors.protein && (
+                    <Text style={styles.errorText}>Invalid</Text>
+                  )}
+                </View>
               </View>
 
               <View style={styles.inputRow}>
-                <Input
-                  label="Carbs (g)"
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={carbs}
-                  onChangeText={setCarbs}
-                  containerStyle={styles.halfInput}
-                  editable={!selectedProduct}
-                />
-                <Input
-                  label="Fats (g)"
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={fats}
-                  onChangeText={setFats}
-                  containerStyle={styles.halfInput}
-                  editable={!selectedProduct}
-                />
+                <View style={styles.halfInputContainer}>
+                  <Text style={styles.inputLabel}>Carbs (g)</Text>
+                  <TextInput
+                    style={[styles.textInput, errors.carbs && styles.inputError]}
+                    placeholder="0"
+                    placeholderTextColor={colors.gray[400]}
+                    keyboardType="decimal-pad"
+                    value={carbs}
+                    onChangeText={(text) => handleNutritionalChange(text, setCarbs, "carbs")}
+                  />
+                  {errors.carbs && (
+                    <Text style={styles.errorText}>Invalid</Text>
+                  )}
+                </View>
+                <View style={styles.halfInputContainer}>
+                  <Text style={styles.inputLabel}>Fats (g)</Text>
+                  <TextInput
+                    style={[styles.textInput, errors.fats && styles.inputError]}
+                    placeholder="0"
+                    placeholderTextColor={colors.gray[400]}
+                    keyboardType="decimal-pad"
+                    value={fats}
+                    onChangeText={(text) => handleNutritionalChange(text, setFats, "fats")}
+                  />
+                  {errors.fats && (
+                    <Text style={styles.errorText}>Invalid</Text>
+                  )}
+                </View>
               </View>
 
               <View style={styles.modalButtons}>
@@ -717,6 +940,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   lastSection: {
+    marginTop: 16,
     marginBottom: 100,
   },
   cardTitle: {
@@ -981,10 +1205,39 @@ const styles = StyleSheet.create({
   inputContainer: {
     marginBottom: 16,
   },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.gray[700],
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.gray[900],
+  },
+  inputError: {
+    borderColor: colors.red[500],
+    borderWidth: 2,
+    backgroundColor: colors.red[50],
+  },
+  errorText: {
+    fontSize: 12,
+    color: colors.red[500],
+    marginTop: 4,
+  },
   inputRow: {
     flexDirection: "row",
     gap: 12,
     marginBottom: 16,
+  },
+  halfInputContainer: {
+    flex: 1,
   },
   halfInput: {
     flex: 1,
@@ -1000,45 +1253,6 @@ const styles = StyleSheet.create({
   addDiaryButton: {
     flex: 2,
   },
-  recentProductsContainer: {
-    marginBottom: 20,
-  },
-  recentProductsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.gray[700],
-    marginBottom: 12,
-  },
-  recentProductCard: {
-    width: 120,
-    backgroundColor: colors.gray[50],
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: colors.gray[200],
-  },
-  recentProductName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.gray[900],
-    marginBottom: 6,
-    height: 36,
-  },
-  recentProductCalories: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.primary[600],
-    marginBottom: 8,
-  },
-  recentProductMacros: {
-    gap: 4,
-  },
-  recentProductMacro: {
-    fontSize: 11,
-    color: colors.gray[600],
-  },
-  // Dropdown styles
   dropdownContainer: {
     marginBottom: 20,
   },
@@ -1100,7 +1314,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.gray[500],
   },
-  // Selected product styles
   selectedProductContainer: {
     backgroundColor: colors.primary[50],
     borderRadius: 12,
@@ -1136,16 +1349,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.gray[600],
   },
-  // Weight input style
-  weightInput: {
-    marginBottom: 16,
-  },
-  // Calculated section styles
   calculatedSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   calculatedTitle: {
     fontSize: 14,
@@ -1154,7 +1362,31 @@ const styles = StyleSheet.create({
   },
   calculatedSubtitle: {
     fontSize: 12,
-    color: colors.gray[500],
+    color: colors.green[500],
     fontStyle: "italic",
+  },
+  decimalHint: {
+    fontSize: 11,
+    color: colors.gray[500],
+    marginBottom: 12,
+    fontStyle: "italic",
+  },
+  recalculateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.primary[50],
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  recalculateText: {
+    fontSize: 13,
+    color: colors.primary[600],
+    fontWeight: "500",
   },
 });

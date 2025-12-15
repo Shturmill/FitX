@@ -6,6 +6,19 @@ const USER_SETTINGS_KEY = "@fitx_user_settings";
 const AUTH_KEY = "@fitx_auth";
 const HEALTH_METRICS_KEY = "@fitx_health_metrics";
 const ACHIEVEMENTS_KEY = "@fitx_achievements";
+const MEALS_KEY = "@fitx_meals";
+
+export interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  time: string;
+  category: "breakfast" | "lunch" | "dinner" | "snack";
+  date: string; // YYYY-MM-DD to track which day the meal belongs to
+}
 
 export interface Product {
   id: string;
@@ -384,6 +397,85 @@ export const storageUtils = {
     } catch (error) {
       console.error("Error updating achievement progress:", error);
       return [];
+    }
+  },
+
+  // Meals Functions
+  async getMeals(): Promise<Meal[]> {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const data = await AsyncStorage.getItem(MEALS_KEY);
+      if (data) {
+        const meals: Meal[] = JSON.parse(data);
+        // Return only today's meals
+        return meals.filter(meal => meal.date === today);
+      }
+      return [];
+    } catch (error) {
+      console.error("Error loading meals:", error);
+      return [];
+    }
+  },
+
+  async saveMeals(meals: Meal[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(meals));
+    } catch (error) {
+      console.error("Error saving meals:", error);
+    }
+  },
+
+  async addMeal(meal: Omit<Meal, "id" | "date">): Promise<Meal> {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const allMeals = await this.getAllMeals();
+
+      const newMeal: Meal = {
+        ...meal,
+        id: Date.now().toString(),
+        date: today,
+      };
+
+      allMeals.push(newMeal);
+      await this.saveMeals(allMeals);
+      return newMeal;
+    } catch (error) {
+      console.error("Error adding meal:", error);
+      throw error;
+    }
+  },
+
+  async removeMeal(id: string): Promise<void> {
+    try {
+      const allMeals = await this.getAllMeals();
+      const filteredMeals = allMeals.filter(meal => meal.id !== id);
+      await this.saveMeals(filteredMeals);
+    } catch (error) {
+      console.error("Error removing meal:", error);
+    }
+  },
+
+  async getAllMeals(): Promise<Meal[]> {
+    try {
+      const data = await AsyncStorage.getItem(MEALS_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (error) {
+      console.error("Error loading all meals:", error);
+      return [];
+    }
+  },
+
+  async clearTodayMeals(): Promise<void> {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const allMeals = await this.getAllMeals();
+      const filteredMeals = allMeals.filter(meal => meal.date !== today);
+      await this.saveMeals(filteredMeals);
+    } catch (error) {
+      console.error("Error clearing today's meals:", error);
     }
   },
 };

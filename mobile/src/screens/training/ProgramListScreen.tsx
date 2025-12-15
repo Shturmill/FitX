@@ -112,26 +112,8 @@ export function ProgramListScreen() {
     }
   };
 
-  const handleDeleteProgram = (program: WorkoutProgram) => {
-    Alert.alert(
-      "Delete Workout Plan",
-      `Are you sure you want to delete "${program.name}"? This action cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const success = await deleteProgram(program.id);
-            if (success) {
-              Alert.alert("Deleted", `"${program.name}" has been deleted.`);
-            } else {
-              Alert.alert("Error", "Failed to delete the workout plan.");
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteProgram = async (program: WorkoutProgram) => {
+    await deleteProgram(program.id);
   };
 
   // Calculate weekly stats from history
@@ -555,10 +537,12 @@ export function ProgramListScreen() {
               </Text>
             </Card>
           ) : (
-            history.slice(0, 20).map((workout, index) => (
+            history.slice(0, 20).map((workout, index) => {
+              const isLast = index === Math.min(history.length - 1, 19);
+              return (
               <Card
                 key={workout.id}
-                style={[styles.historyCard, index === Math.min(history.length - 1, 19) && styles.lastSection]}
+                style={isLast ? { ...styles.historyCard, ...styles.lastSection } : styles.historyCard}
               >
                 <View style={styles.historyRow}>
                   <View style={styles.historyIcon}>
@@ -590,7 +574,8 @@ export function ProgramListScreen() {
                   </View>
                 </View>
               </Card>
-            ))
+              );
+            })
           )}
         </>
       )}
