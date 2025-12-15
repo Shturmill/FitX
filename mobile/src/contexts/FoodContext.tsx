@@ -5,10 +5,18 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { storageUtils, Product, HealthMetrics, Meal } from "../utils/storage";
-import { healthMetricsAPI } from "../utils/api";
+import { storageUtils, Product, HealthMetrics } from "../utils/storage";
 
-export type { Meal } from "../utils/storage";
+export interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  time: string;
+  category: "breakfast" | "lunch" | "dinner" | "snack";
+}
 
 interface FoodContextType {
   meals: Meal[];
@@ -59,20 +67,13 @@ export function FoodProvider({ children }: { children: ReactNode }) {
 
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Load product history, user goals, water intake, meals, and health metrics on mount
+  // Load product history, user goals, water intake, and health metrics on mount
   useEffect(() => {
     loadProductHistory();
     loadUserGoals();
     loadWaterIntake();
-    loadMeals();
     loadHealthMetrics();
-    syncHealthMetricsWithAPI();
   }, []);
-
-  const loadMeals = async () => {
-    const savedMeals = await storageUtils.getMeals();
-    setMeals(savedMeals);
-  };
 
   const loadWaterIntake = async () => {
     const waterIntake = await storageUtils.getWaterIntake();
@@ -97,31 +98,6 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   const handleUpdateHealthMetrics = async (metrics: Partial<HealthMetrics>) => {
     const updated = await storageUtils.saveHealthMetrics(metrics);
     setHealthMetrics(updated);
-    
-    // Try to sync with backend API
-    try {
-      await healthMetricsAPI.updateHealthMetrics(metrics);
-    } catch (error) {
-      console.warn("Failed to sync health metrics with backend:", error);
-      // Continue anyway - local storage is still updated
-    }
-  };
-
-  // Sync health metrics from backend API
-  const syncHealthMetricsWithAPI = async () => {
-    try {
-      const isConnected = await healthMetricsAPI.testConnection();
-      if (isConnected) {
-        const apiMetrics = await healthMetricsAPI.getHealthMetrics();
-        setHealthMetrics(apiMetrics);
-        // Also save to local storage
-        await storageUtils.saveHealthMetrics(apiMetrics);
-        console.log("Synced health metrics from backend API");
-      }
-    } catch (error) {
-      console.warn("Could not sync with backend API:", error);
-      // Continue with local storage
-    }
   };
 
   const clearMeals = async () => {

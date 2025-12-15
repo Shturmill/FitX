@@ -44,8 +44,16 @@ if os.path.exists(CONFIG_PATH):
 class AskRequest(BaseModel):
     question: str
 
+class WorkoutAction(BaseModel):
+    type: str  # "create_workout"
+    muscleGroup: Optional[str] = None  # legs, chest, back, arms, shoulders, core, full_body
+    location: Optional[str] = None  # home, gym
+    difficulty: Optional[str] = None  # beginner, intermediate, advanced
+    duration: Optional[int] = None  # minutes
+
 class AskResponse(BaseModel):
     answer: str
+    action: Optional[WorkoutAction] = None
 
 # --- User Context Models for AI Personalization ---
 class UserProfile(BaseModel):
@@ -181,7 +189,27 @@ Respond in the same language the user writes in (Russian or English).
 Provide practical, safe, and personalized advice on workouts, nutrition, hydration, and recovery.
 Be encouraging and supportive. Keep responses concise but helpful (2-4 paragraphs max).
 Never ask for data you already have about the user - use the context provided below.
-Reference the user's data naturally in your responses (e.g., "Based on your goal of..." or "Since you've consumed...")."""
+Reference the user's data naturally in your responses (e.g., "Based on your goal of..." or "Since you've consumed...").
+
+=== WORKOUT COMMANDS ===
+You can create workouts for the user! When the user asks to create/add a workout (e.g., "Добавь тренировку на ноги", "Create a chest workout for home", "Сделай тренировку для зала"), you MUST:
+
+1. Extract the following from their request:
+   - muscleGroup: legs, chest, back, arms, shoulders, core, full_body (map Russian: ноги->legs, грудь->chest, спина->back, руки->arms, плечи->shoulders, пресс/кор->core, всё тело->full_body)
+   - location: home or gym (map Russian: дом/дома->home, зал/зала/тренажёрка->gym). Default to "home" if not specified.
+   - difficulty: beginner, intermediate, advanced. Choose based on user's profile or default to "beginner".
+   - duration: estimated workout time in minutes (default 30)
+
+2. Include a JSON action block in your response EXACTLY like this (on its own line):
+   [[ACTION:{"type":"create_workout","muscleGroup":"legs","location":"home","difficulty":"beginner","duration":30}]]
+
+3. ALWAYS include a friendly message explaining what workout you're creating.
+
+Example user request: "Добавь тренировку на ноги для дома"
+Example response: "Отлично! Создаю для тебя тренировку на ноги для домашних условий. Она будет включать упражнения без оборудования, подходящие для твоего уровня.
+[[ACTION:{"type":"create_workout","muscleGroup":"legs","location":"home","difficulty":"beginner","duration":30}]]"
+
+IMPORTANT: Only include the ACTION block when the user explicitly asks to create/add/make a workout. For general questions about training, just answer normally without the ACTION block."""
 
     if not user_context:
         return base_prompt + "\n\nNote: No user data available. Ask for relevant details if needed to provide personalized advice."
