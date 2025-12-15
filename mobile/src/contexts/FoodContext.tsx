@@ -4,8 +4,10 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from "react";
 import { storageUtils, Product, HealthMetrics } from "../utils/storage";
+import { healthApi, HealthMetricsResponse } from "../utils/healthApi";
 
 export interface Meal {
   id: string;
@@ -28,6 +30,7 @@ interface FoodContextType {
   waterGlasses: number;
   waterGoal: number;
   healthMetrics: HealthMetrics;
+  isLoadingHealthMetrics: boolean;
   addMeal: (meal: Omit<Meal, "id" | "date">) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
   searchProducts: (query: string) => Promise<Product[]>;
@@ -39,9 +42,11 @@ interface FoodContextType {
   getCategoryCalories: (category: string) => number;
   loadProductHistory: () => Promise<void>;
   reloadUserGoals: () => Promise<void>;
+  reloadMeals: () => Promise<void>;
   incrementWater: () => Promise<void>;
   decrementWater: () => Promise<void>;
   updateHealthMetrics: (metrics: Partial<HealthMetrics>) => Promise<void>;
+  syncHealthMetricsFromBackend: () => Promise<void>;
   clearMeals: () => Promise<void>;
 }
 
@@ -64,15 +69,26 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   });
 
   const [meals, setMeals] = useState<Meal[]>([]);
-
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
 
-  // Load product history, user goals, water intake, and health metrics on mount
+  // Load product history, user goals, water intake, health metrics, and meals on mount
   useEffect(() => {
     loadProductHistory();
     loadUserGoals();
     loadWaterIntake();
     loadHealthMetrics();
+    loadMealsFromStorage();
+    
+    // Sync health metrics from backend immediately and then every 30 seconds
+    syncHealthMetricsFromBackend();
+    const intervalId = setInterval(() => {
+      syncHealthMetricsFromBackend();
+    }, 30000); // Sync every 30 seconds
+    
+    return () => {
+      clearInterval(intervalId);
+    };
   }, []);
 
   const loadWaterIntake = async () => {
@@ -95,9 +111,62 @@ export function FoodProvider({ children }: { children: ReactNode }) {
     setHealthMetrics(metrics);
   };
 
+  const loadMealsFromStorage = async () => {
+    try {
+      const todayMeals = await storageUtils.getMeals();
+      console.log("[FoodContext] Loaded meals from storage:", todayMeals);
+      setMeals(todayMeals);
+    } catch (error) {
+      console.error("[FoodContext] Error loading meals from storage:", error);
+    }
+  };
+
+  /**
+   * Sync health metrics from backend (port 8000)
+   */
+  const syncHealthMetricsFromBackend = useCallback(async () => {
+    setIsLoadingHealthMetrics(true);
+    try {
+      const backendMetrics = await healthApi.getHealthMetrics();
+      
+      if (backendMetrics) {
+        console.log("[FoodContext] Synced metrics from backend:", backendMetrics);
+        
+        // Update local state with backend values
+        const updatedMetrics: HealthMetrics = {
+          steps: backendMetrics.steps,
+          stepsGoal: backendMetrics.stepsGoal,
+          heartRate: backendMetrics.heartRate,
+          sleepHours: backendMetrics.sleepHours,
+          activeMinutes: backendMetrics.activeMinutes,
+          date: new Date().toISOString().split("T")[0],
+        };
+        
+        setHealthMetrics(updatedMetrics);
+        
+        // Also save to local storage for persistence
+        await storageUtils.saveHealthMetrics(updatedMetrics);
+      } else {
+        console.warn("[FoodContext] Failed to sync health metrics from backend");
+      }
+    } catch (error) {
+      console.error("[FoodContext] Error syncing health metrics:", error);
+    } finally {
+      setIsLoadingHealthMetrics(false);
+    }
+  }, []);
+
   const handleUpdateHealthMetrics = async (metrics: Partial<HealthMetrics>) => {
     const updated = await storageUtils.saveHealthMetrics(metrics);
     setHealthMetrics(updated);
+    
+    // Also sync with backend
+    const { date, ...backendUpdate } = updated;
+    const backendResult = await healthApi.updateHealthMetrics(backendUpdate);
+    
+    if (backendResult) {
+      console.log("[FoodContext] Updated metrics on backend:", backendResult);
+    }
   };
 
   const clearMeals = async () => {
@@ -121,32 +190,48 @@ export function FoodProvider({ children }: { children: ReactNode }) {
   };
 
   const addMeal = async (meal: Omit<Meal, "id" | "date">) => {
-    // Save meal to storage and get the saved meal with id and date
-    const newMeal = await storageUtils.addMeal(meal);
-    const updatedMeals = [...meals, newMeal];
-    setMeals(updatedMeals);
+    try {
+      // Save meal to storage and get the saved meal with id and date
+      const newMeal = await storageUtils.addMeal(meal);
+      console.log("[FoodContext] Added meal:", newMeal);
+      
+      // Update local state with the new meal
+      const updatedMeals = [...meals, newMeal];
+      setMeals(updatedMeals);
 
-    // Save product to history with category
-    await storageUtils.saveProduct({
-      name: meal.name,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fats: meal.fats,
-      category: meal.category,
-    });
+      // Save product to history with category
+      await storageUtils.saveProduct({
+        name: meal.name,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fats: meal.fats,
+        category: meal.category,
+      });
 
-    // Reload product history
-    await loadProductHistory();
+      // Reload product history
+      await loadProductHistory();
 
-    // Check calorie goal achievement
-    const totalCaloriesAfterMeal = updatedMeals.reduce((sum, m) => sum + m.calories, 0);
-    await storageUtils.checkCalorieGoalAchievement(totalCaloriesAfterMeal, calorieGoal);
+      // Check calorie goal achievement
+      const totalCaloriesAfterMeal = updatedMeals.reduce((sum, m) => sum + m.calories, 0);
+      await storageUtils.checkCalorieGoalAchievement(totalCaloriesAfterMeal, calorieGoal);
+    } catch (error) {
+      console.error("[FoodContext] Error adding meal:", error);
+      throw error;
+    }
   };
 
   const removeMeal = async (id: string) => {
-    await storageUtils.removeMeal(id);
-    setMeals((prev) => prev.filter((meal) => meal.id !== id));
+    try {
+      await storageUtils.removeMeal(id);
+      console.log("[FoodContext] Removed meal with id:", id);
+      
+      // Update local state
+      setMeals((prev) => prev.filter((meal) => meal.id !== id));
+    } catch (error) {
+      console.error("[FoodContext] Error removing meal:", error);
+      throw error;
+    }
   };
 
   const searchProducts = async (query: string): Promise<Product[]> => {
@@ -191,6 +276,8 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         fatsGoal,
         waterGlasses,
         waterGoal,
+        healthMetrics,
+        isLoadingHealthMetrics,
         addMeal,
         removeMeal,
         searchProducts,
@@ -202,11 +289,12 @@ export function FoodProvider({ children }: { children: ReactNode }) {
         getCategoryCalories,
         loadProductHistory,
         reloadUserGoals: loadUserGoals,
+        reloadMeals: loadMealsFromStorage,
         incrementWater: handleIncrementWater,
         decrementWater: handleDecrementWater,
         updateHealthMetrics: handleUpdateHealthMetrics,
+        syncHealthMetricsFromBackend,
         clearMeals,
-        healthMetrics,
       }}
     >
       {children}

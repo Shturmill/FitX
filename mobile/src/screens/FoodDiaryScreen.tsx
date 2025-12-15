@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Card,
@@ -74,6 +75,7 @@ export function FoodDiaryScreen() {
     waterGlasses,
     incrementWater,
     decrementWater,
+    reloadMeals,
   } = useFoodContext();
 
   const [isAddingMeal, setIsAddingMeal] = useState(false);

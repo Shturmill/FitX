@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -30,11 +31,20 @@ type DashboardNavigationProp = BottomTabNavigationProp<TabParamList, "Home">;
 
 export function DashboardScreen() {
   const navigation = useNavigation<DashboardNavigationProp>();
-  const { getTotalCalories, calorieGoal, waterGlasses, waterGoal, healthMetrics } = useFoodContext();
+  const {
+    getTotalCalories,
+    calorieGoal,
+    waterGlasses,
+    waterGoal,
+    healthMetrics,
+    isLoadingHealthMetrics,
+    syncHealthMetricsFromBackend,
+  } = useFoodContext();
   const { userSettings } = useAuth();
   const { messages, isLoading, sendMessage, expandChat } = useAI();
 
   const [inputValue, setInputValue] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Get calorie data from context
   const totalCalories = getTotalCalories();
@@ -60,15 +70,38 @@ export function DashboardScreen() {
     await sendMessage(message);
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await syncHealthMetricsFromBackend();
+    setIsRefreshing(false);
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing || isLoadingHealthMetrics}
+          onRefresh={handleRefresh}
+          colors={[colors.primary[600]]}
+          tintColor={colors.primary[600]}
+        />
+      }
+    >
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.welcomeText}>
             Welcome Back{userSettings?.name ? `, ${userSettings.name}` : ""}!
           </Text>
           <Text style={styles.subtitle}>Let's crush your goals today</Text>
+          {isLoadingHealthMetrics && (
+            <View style={styles.syncBadge}>
+              <ActivityIndicator size="small" color={colors.primary[600]} />
+              <Text style={styles.syncBadgeText}>Syncing data...</Text>
+            </View>
+          )}
         </View>
         <Avatar
           initials={
@@ -600,6 +633,17 @@ const styles = StyleSheet.create({
   tapHintText: {
     fontSize: 12,
     color: "rgba(255,255,255,0.8)",
+    fontWeight: "500",
+  },
+  syncBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  syncBadgeText: {
+    fontSize: 12,
+    color: colors.primary[600],
     fontWeight: "500",
   },
 });
